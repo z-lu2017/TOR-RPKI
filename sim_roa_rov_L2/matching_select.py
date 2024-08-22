@@ -2621,23 +2621,17 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
 
     rovset = load_rov_database(rovset, method)
 
+    start_time0 = time.time()
     relay_rovs, relay_bws, relay_weights, relay_roas, gs, WGG, WGD = calc_relay_stats(consensus_date, rovset)
-
-    countries, cweights = grab_client_geo_dist(consensus_date, countries_save, cweights_save)
+    end_time0 = time.time()
+    print("calc relay stats took = " + str(end_time0 - start_time0) + "s")
 
     start_time1 = time.time()
-
+    countries, cweights = grab_client_geo_dist(consensus_date, countries_save, cweights_save)
     wa_both, wa_roa, wa_rov, wa_neither = calc_roa_rov_client(countries, cweights, numIPdict, csvfile, rovset)
-
     end_time1 = time.time()
-
     print("calc client roa rov distribution took = " + str(end_time1 - start_time1) +  " s") 
 
-    # # add the two groups together
-    # wa_both += (1- sum(cweights)) * both_other
-    # wa_roa += (1-sum(cweights)) * roa_other
-    # wa_rov += (1-sum(cweights)) * rov_other
-    # wa_neither += (1-sum(cweights)) * neither_other
 
     status_list = ['roa', 'rov', 'both', 'neither']
     status_weight = [wa_roa, wa_rov, wa_both, wa_neither]
@@ -2700,12 +2694,6 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
         
         t  = datetime(int(consensus_date2[0]),int(consensus_date2[1]),int(consensus_date2[2]),int(consensus_date2[3]))
 
-
-        # matched_num_pre = matching_pre(relay_bws, gs, clients_both, clients_roa, clients_rov, clients_neither, relay_weights, WGG, WGD, rovset)
-
-        # matched = matched_num_pre / sum_num_clients
-
-        # print("matched rate in old pre = ", matched)
         save_clients = True
 
         matched_num_post = matching_post(consensus_date, clients_both, clients_roa, clients_rov, clients_neither, relay_bws, relay_roas, relay_rovs, client_dist, gs, WGG, WGD, rovset, save_clients)
@@ -2714,14 +2702,13 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
 
         return matched, wa_both, wa_roa, wa_rov, wa_neither, countries, cweights
 
-
     else:
         print("loading clients directly from pickle and update based on new geoclient distribution")
         y = consensus_date.split("-")[0]
         m = consensus_date.split("-")[1]
         d = consensus_date.split("-")[2]
         new_date = y + "-" + m + "-" + d
-        file = open("../clients_daily//1000000TorClients-" + new_date + ".pickle", 'rb')
+        file = open("../clients_daily/1000000TorClients-" + new_date + ".pickle", 'rb')
         resultClientList = pickle.load(file)
 
         # # compare the difference to arrive at the delta clients
@@ -3059,6 +3046,7 @@ def get_next_date(start_date):
 
 # main function - starts simulation from 2021-01 to 2023-05
 def run_sim(start_date_global, end_date_global, initialize):
+    start_time = time.time()
     hours = ['00']
 
     # output lists
@@ -3200,7 +3188,8 @@ def run_sim(start_date_global, end_date_global, initialize):
             df.to_csv("./output-matching" + str(consensus_date_with_hour) + ".csv", index=False)
         
         consensus_date_formal = get_next_date(consensus_date_formal)
-
+    end_time = time.time()
+    print("what does it take to complete one iter = ", end_time - start_time)
 
 
 def plot_result2():
@@ -3265,7 +3254,7 @@ def plot_result2():
     # plt.show()
     plt.savefig('matching-discount-results.png', bbox_inches='tight', dpi=599)
 
-start_date = "2024-02-13"
+start_date = "2024-04-01"
 end_date = "2024-05-01"
 initialize = False
 run_sim(start_date, end_date, initialize)
