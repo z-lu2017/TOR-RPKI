@@ -2180,6 +2180,6 @@ def run_sim(start_date_global, end_date_global):
         consensus_date_formal = get_next_date(consensus_date_formal)
 
 
-start_date = "2024-02-17"
-end_date = "2024-03-01"
+start_date = "2024-01-16"
+end_date = "2024-01-20"
 run_sim(start_date, end_date)

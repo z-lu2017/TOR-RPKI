@@ -14,7 +14,6 @@ from util import *
 import pyasn
 import random
 from pyscipopt import Model
-import yaml
 import re
 
 # downloaded tor user/country distribution: https://metrics.torproject.org/userstats-relay-table.html?start=2021-05-01&end=2023-05-31
@@ -1424,7 +1423,11 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
                     guardWeights.append(w)
                     guardASNs.append(0)
 
-
+    weighted_average_before = 0
+    for i in range(len(weights2)):
+        p = weights2[i] / sum(weights2)
+        weighted_average_before += p * bws[i]
+    print("what is weighted_average_before = ", weighted_average_before)
 
     # compute statistics, rov-covered relay percentage and rov-covered bandwidth
     rov_relay_percentage = sum(rovs)/len(ASNs)
@@ -1467,7 +1470,6 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
             weightdict[numIPdict[i].origin].append(numIPdict[i].numIPv4)
 
     if saveClients:
-        start_time = time.time()
         print("starting client generation")
         print("=============================================")
         # selection starts
@@ -1563,47 +1565,39 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
                 clients_neither.append(c)
 
             count += 1
-            resultClientList.append(0)
+            resultClientList.append(c)
         
-        # with open("1000TorClients.pickle", 'wb') as f:
-        #     pickle.dump(resultClientList, f)
-        end_time1 = time.time()
-        print("Done generation for " + str(numClients) + " clients")
-        print("client generate time = ", end_time1 - start_time)
-
+        with open("1000000TorClients.pickle", 'wb') as f:
+            pickle.dump(resultClientList, f)
     else:
         print("loading clients directly from pickle")
-        file = open("1000TorClients.pickle", 'rb')
+        file = open("1000000TorClients.pickle", 'rb')
         resultClientList = pickle.load(file)
         for c in resultClientList:
-            if check_roa(c, roaDict) and (check_rovset(c.AS.ASN, rovset)):
-                c.roaCovered = True
-                c.rovCovered  = True
-                croa_rov += 1
+            if c.roaCovered == True and c.rovCovered ==True:
                 croas.append(1)
                 crovs.append(1)
+                croa_rov += 1
                 clients_both.append(c)
-            elif check_roa(c, roaDict):
-                c.roaCovered = True
-                c.rovCovered = False
-                croa += 1
+            if c.roaCovered == True and c.rovCovered == False:
                 croas.append(1)
                 crovs.append(0)
+                croa += 1
                 clients_roa.append(c)
-            elif check_rovset(c.AS.ASN, rovset):
+            if c.roaCovered == False and c.rovCovered == True:
                 c.roaCovered = False
                 c.rovCovered = True
-                crov += 1
                 croas.append(0)
                 crovs.append(1)
+                crov += 1
                 clients_rov.append(c)
-            else:
+            if c.roaCovered == False and c.rovCovered == False:
                 c.roaCovered = False
                 c.rovCovered = False
-                cneither += 1
                 croas.append(0)
                 crovs.append(0)
                 clients_neither.append(c)
+                cneither += 1
 
             
     print("Done generating clients lists")
@@ -1773,17 +1767,32 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
             croas_neither.append(0)
             crovs_neither.append(0)
 
-        start_time2 = time.time()
         optimized_weights = lp_optimization(weights2, roas, rovs, croas_both, crovs_both, croas_roa, crovs_roa, croas_rov, crovs_rov, croas_neither, crovs_neither, client_dist)
-        end_time2 = time.time()
-
-        print("lp time = ",end_time2 - start_time2)
 
         optimized_weights1 = optimized_weights[0:len(roas)]
         optimized_weights2 = optimized_weights[len(roas):2*len(roas)]
         optimized_weights3 = optimized_weights[2*len(roas): 3*len(roas)]
         optimized_weights4 = optimized_weights[3*len(roas): 4*len(roas)]
     
+        weighted_average_after = 0
+        for i in range(len(optimized_weights1)):
+            p = optimized_weights[i] / sum(optimized_weights1)
+            weighted_average_after += p * bws[i] * client_dist[0]
+
+        for i in range(len(optimized_weights2)):
+            p = optimized_weights2[i] / sum(optimized_weights2)
+            weighted_average_after += p * bws[i] * client_dist[1]
+
+        for i in range(len(optimized_weights3)):
+            p = optimized_weights3[i] / sum(optimized_weights3)
+            weighted_average_after += p * bws[i] * client_dist[2]
+
+        for i in range(len(optimized_weights4)):
+            p = optimized_weights4[i] / sum(optimized_weights4)
+            weighted_average_after += p * bws[i] * client_dist[3]
+
+        print("what is weighted average after = ", weighted_average_after)
+'''
         utilization = 0
         load = 0.5
 
@@ -1794,8 +1803,6 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
             utilization += p * sum(bws) * load
 
         ut_perc = utilization/sum(bws)
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        print("utilizaiton = ", ut_perc)
 
         print("outputting final all weights to csv")
         d = {'identity': identities, 'roa': roas, 'rov': rovs, 'weights': optimized_weights1}
@@ -1993,6 +2000,7 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
         print("===========================================================")
         
     return results_before, results_after, rov_relay_percentage, rov_bandwidth_percentage
+    '''
 
 def graph_ROACoverage(h, p_roa, make_pickle = True,make_graph = True, name = "0.5ROACoverage2023.png"):
     """
@@ -2170,7 +2178,7 @@ def run_sim():
 
     # date range to iterate through
     years = ['2021', '2022']
-    years2 = ['2023']
+    years2 = ['2024']
     months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
     months2 = ['05']
     days = ['01']
@@ -2193,8 +2201,6 @@ def run_sim():
 
     for y in years2:
         for m in months2:
-            start_time0 = time.time()
-            print("starting time count 0")
             consensus_date = y + m + "01"
 
             # find routeview data for that month
@@ -2264,64 +2270,58 @@ def run_sim():
                 print("Done updating pickles")
                 os.chdir(root)
 
-                end_time0 = time.time()
-                print("Done parsing input, take time = ", end_time0 - start_time0)
-
                 # create clients and simulate client guard node selection            
-                # matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 75235, roa_file, numIPdict, ROVset, True, 0)
-                # for i in range(len(matched_perc)):
-                #     date_strings.append(consensus_date_with_hour)
-                #     case_strings.append("no added rov")
-                #     print("no added rov")
-                #     print("rov_relay_percentage = ", rov_relay_percentage)
-                #     print("rov bandwidth percentage = ", rov_bandwidth_percentage)
-                #     m1.append(matched_perc[i])
-                #     m2.append(matched_perc2[i])
-                # matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 75235, roa_file, numIPdict, ROVset, True, 1)
-                # for i in range(len(matched_perc)):
-                #     date_strings.append(consensus_date_with_hour)
-                #     case_strings.append("manrs-high")
-                #     print("manrs-high")
-                #     print("rov_relay_percentage = ", rov_relay_percentage)
-                #     print("rov bandwidth percentage = ", rov_bandwidth_percentage)
-                #     m1.append(matched_perc[i])
-                #     m2.append(matched_perc2[i])
-                matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 1000, roa_file, numIPdict, ROVset, False, 2)
+                #matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, ROVset, True, 0)
+                #for i in range(len(matched_perc)):
+                #    date_strings.append(consensus_date_with_hour)
+                #    case_strings.append("no added rov")
+                #    print("no added rov")
+                #    print("rov_relay_percentage = ", rov_relay_percentage)
+                #    print("rov bandwidth percentage = ", rov_bandwidth_percentage)
+                #    m1.append(matched_perc[i])
+                #    m2.append(matched_perc2[i])
+                #matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, ROVset, False, 1)
+                #for i in range(len(matched_perc)):
+                #    date_strings.append(consensus_date_with_hour)
+                #    case_strings.append("manrs-high")
+                #    print("manrs-high")
+                #    print("rov_relay_percentage = ", rov_relay_percentage)
+                #    print("rov bandwidth percentage = ", rov_bandwidth_percentage)
+                #    m1.append(matched_perc[i])
+                #    m2.append(matched_perc2[i])
+                matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, ROVset, False, 2)
                 for i in range(len(matched_perc)):
                     date_strings.append(consensus_date_with_hour)
                     case_strings.append("RoVISTA")
-                    print("RoVISTA")
-                    print("rov_relay_percentage = ", rov_relay_percentage)
-                    print("rov bandwidth percentage = ", rov_bandwidth_percentage)
+                #   print("RoVISTA")
+                #    print("rov_relay_percentage = ", rov_relay_percentage)
+                #    print("rov bandwidth percentage = ", rov_bandwidth_percentage)
                     m1.append(matched_perc[i])
                     m2.append(matched_perc2[i])
-                # matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 75235, roa_file, numIPdict, ROVset, True, 3)
-                # for i in range(len(matched_perc)):
-                #     date_strings.append(consensus_date_with_hour)
-                #     case_strings.append("Shulman group")
-                #     print("Shulman group")
+                #matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, ROVset, False, 3)
+                #for i in range(len(matched_perc)):
+                #    date_strings.append(consensus_date_with_hour)
+                #    case_strings.append("Shulman group")
+                #    print("Shulman group")
                 #     print("rov_relay_percentage = ", rov_relay_percentage)
                 #     print("rov bandwidth percentage = ", rov_bandwidth_percentage)
-                #     m1.append(matched_perc[i])
-                #     m2.append(matched_perc2[i])
-                # matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 75235, roa_file, numIPdict, ROVset, True, 4)
-                # for i in range(len(matched_perc)):
-                #     date_strings.append(consensus_date_with_hour)
-                #     case_strings.append("manrs-low")
+                #    m1.append(matched_perc[i])
+                #    m2.append(matched_perc2[i])
+                #matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, ROVset, False, 4)
+                #for i in range(len(matched_perc)):
+                #    date_strings.append(consensus_date_with_hour)
+                #    case_strings.append("manrs-low")
                 #     print("manrs-low")
                 #     print("rov_relay_percentage = ", rov_relay_percentage)
                 #     print("rov bandwidth percentage = ", rov_bandwidth_percentage)
-                #     m1.append(matched_perc[i])
-                #     m2.append(matched_perc2[i])
+                #    m1.append(matched_perc[i])
+                #   m2.append(matched_perc2[i])
             
                 print("finished year = " + y + " month = " + m + " hour = " + h)    
 
-                end_time1 = time.time()
-                print("Done one run total time = ", end_time1- start_time0)
-
-    d = {'date': date_strings, 'case': case_strings, 'matched_before': m1, "matched_after": m2}
-    df = pd.DataFrame(data = d)
-    df.to_csv("./output-matching-202305.csv", index=False)
+    #d = {'date': date_strings, 'case': case_strings, 'matched_before': m1, "matched_after": m2}
+    #df = pd.DataFrame(data = d)
+    #df.to_csv("./output-matching-202305.csv", index=False)
 
 
 
@@ -2389,5 +2389,5 @@ def plot_result2():
 
 
 run_sim()
-# plot_result()
+#plot_result()
 #plot_result2()

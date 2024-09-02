@@ -1523,7 +1523,8 @@ def calc_roa_rov_client(countries, cweights, numIPdict, csvfile, rovset):
     roa_countries["other"] = 0
     both_countries["other"] = 0
     neither_countries["other"] = 0
-    
+   
+    time1 = time.time()
     # for every country
     for c in countries:
         ASarray = []
@@ -1674,7 +1675,10 @@ def calc_roa_rov_client(countries, cweights, numIPdict, csvfile, rovset):
                 neither_countries['other'] += count
                 addedPrefixes.append((ip_ranges2[i], count, "neither"))
             prefix_count_total["other"] += prefixHosts[int(p3.split("/")[1])]
-   
+    time2 = time.time()
+    print("what is time 2 - time 1 =", time2 - time1)
+    time.sleep(10000000000000)
+
     # combine both weighted average
     wa_roa = 0
     wa_rov = 0
@@ -2346,7 +2350,7 @@ def matching_post_new(consensus_date, clients_both, clients_roa, clients_rov, cl
     start_time2 = time.time()
     optimized_weights = lp_optimization(relayWeights, relay_roas, relay_rovs, croas_both, crovs_both, croas_roa, crovs_roa, croas_rov, crovs_rov, croas_neither, crovs_neither, client_dist)
 
-    end_time2 = time.time()
+    end_time2 = time.time( relng_ay)
 
     #print("lp time = ",end_time2 - start_time2)
 
@@ -2354,6 +2358,26 @@ def matching_post_new(consensus_date, clients_both, clients_roa, clients_rov, cl
     optimized_weights2 = optimized_weights[len(relay_roas):2*len(relay_roas)]
     optimized_weights3 = optimized_weights[2*len(relay_roas): 3*len(relay_roas)]
     optimized_weights4 = optimized_weights[3*len(relay_roas): 4*len(relay_roas)]
+
+    weighted_average_after = 0
+    for i in range(len(optimized_weights1)):
+        p = optimized_weights1[i] / sum(optimized_weights1)
+        weighted_average_after += p * relayWeights[i]
+
+    for i in range(len(optimized_weights2)):
+        p = optimized_weights2[i] / sum(optimized_weights2)
+        weighted_average_after += p * relayWeights[i]
+
+    for i in range(len(optimized_weights3)):
+        p = optimized_weights3[i] / sum(optimized_weights3)
+        weighted_average_after += p * relayWeights[i]
+
+    for i in range(len(optimized_weights4)):
+        p = optimized_weights4[i] / sum(optimized_weights4)
+        weighted_average_after += p * relayWeights[i]
+
+    weighted_average_after = weighted_average_after / 4
+    print("what is weighted average after = ", weighted_average_after)
 
     # # quick sanity check to remove any negative results resulting from rounding
     # # https://github.com/scipopt/PySCIPOpt/issues/313
@@ -3169,7 +3193,7 @@ def run_sim(start_date_global, end_date_global, initialize):
             end_load_time = time.time()
 
             print("what is load time = ", end_load_time - load_time_start) 
-            #matched2, wa_both, wa_roa, wa_rov, wa_neither, countries, cweights = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, ROVset, wa_both_save, wa_roa_save, wa_rov_save, wa_neither_save, countreis_save, cweights_save, gen_clients, 2)
+            matched2, wa_both, wa_roa, wa_rov, wa_neither, countries, cweights = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, ROVset, wa_both_save, wa_roa_save, wa_rov_save, wa_neither_save, countreis_save, cweights_save, gen_clients, 2)
             
             #date_strings.append(consensus_date_with_hour)
             #case_strings.append("RoVISTA")

@@ -1749,8 +1749,11 @@ def matching_post_new(consensus_date, clients_both, clients_roa, clients_rov, cl
 
     for client in clients_both:
         # get client coverage info
-        i = random.choices(list(range(len(optimized_weights1))), weights = optimized_weights1, k=1)[0]
-        chosenGuard = gs[i]
+        if client.matchedRelay is not None and client.matchedRelay in gs:
+            chosenGuard = client.matchedRelay
+        else:
+            i = random.choices(list(range(len(optimized_weights1))), weights = optimized_weights1, k=1)[0]
+            chosenGuard = gs[i]
         dynamic_guards[chosenGuard] += 1
         client.matchedRelay = chosenGuard
         if chosenGuard.bw/dynamic_guards[chosenGuard] <= average_bw and optimized_weights1[i] * (chosenGuard.bw/dynamic_guards[chosenGuard]) / average_bw > 0:
@@ -1768,8 +1771,11 @@ def matching_post_new(consensus_date, clients_both, clients_roa, clients_rov, cl
 
     for client in clients_roa:
         # get client coverage info
-        i = random.choices(list(range(len(optimized_weights2))), weights = optimized_weights2, k=1)[0]
-        chosenGuard = gs[i]
+        if client.matchedRelay is not None and client.matchedRelay in gs:
+            chosenGuard = client.matchedRelay
+        else:
+            i = random.choices(list(range(len(optimized_weights1))), weights = optimized_weights1, k=1)[0]
+            chosenGuard = gs[i]
         dynamic_guards[chosenGuard] += 1
         client.matchedRelay = chosenGuard
 
@@ -1788,8 +1794,11 @@ def matching_post_new(consensus_date, clients_both, clients_roa, clients_rov, cl
     
     for client in clients_rov:
         # get client coverage info
-        i = random.choices(list(range(len(optimized_weights3))), weights = optimized_weights3, k=1)[0]
-        chosenGuard = gs[i]
+        if client.matchedRelay is not None and client.matchedRelay in gs:
+            chosenGuard = client.matchedRelay
+        else:
+            i = random.choices(list(range(len(optimized_weights1))), weights = optimized_weights1, k=1)[0]
+            chosenGuard = gs[i]
 
         dynamic_guards[chosenGuard] += 1
         client.matchedRelay = chosenGuard
@@ -1808,8 +1817,11 @@ def matching_post_new(consensus_date, clients_both, clients_roa, clients_rov, cl
     
     for client in clients_neither:
         # get client coverage info
-        i = random.choices(list(range(len(optimized_weights4))), weights = optimized_weights4, k=1)[0]
-        chosenGuard = gs[i]
+        if client.matchedRelay is not None and client.matchedRelay in gs:
+            chosenGuard = client.matchedRelay
+        else:
+            i = random.choices(list(range(len(optimized_weights1))), weights = optimized_weights1, k=1)[0]
+            chosenGuard = gs[i]
 
         dynamic_guards[chosenGuard] += 1
         client.matchedRelay = chosenGuard
@@ -1826,6 +1838,26 @@ def matching_post_new(consensus_date, clients_both, clients_roa, clients_rov, cl
                 matched2 += 1
         except:
             pass
+
+    # add all clients after matching into list
+    resultClientList = []
+    for client in clients_roa:
+        resultClientList.append(client)
+
+    for client in clients_rov:
+        resultClientList.append(client)
+
+    for client in clients_both:
+        resultClientList.append(client)
+
+    for client in clients_neither:
+        resultClientList.append(client)
+
+    # write all client objects along with their selection into file
+    next_date = get_next_date(consensus_date)
+    with open("1000000TorClients-" + next_date + ".pickle", 'wb') as f:
+        pickle.dump(resultClientList, f)
+
     
     return matched2
 
@@ -2175,11 +2207,11 @@ def run_sim(start_date_global, end_date_global):
 
             da = {'date': date_strings, 'case': case_strings, "matched_after": m2}
             df = pd.DataFrame(data = da)
-            df.to_csv("./output-matching-plain" + str(consensus_date_with_hour) + ".csv", index=False)
+            df.to_csv("./output-matching-new" + str(consensus_date_with_hour) + ".csv", index=False)
         
         consensus_date_formal = get_next_date(consensus_date_formal)
 
 
-start_date = "2024-02-17"
-end_date = "2024-03-01"
+start_date = "2024-02-01"
+end_date = "2024-02-05"
 run_sim(start_date, end_date)

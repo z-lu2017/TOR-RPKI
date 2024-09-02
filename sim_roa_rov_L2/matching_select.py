@@ -3254,7 +3254,7 @@ def plot_result2():
     # plt.show()
     plt.savefig('matching-discount-results.png', bbox_inches='tight', dpi=599)
 
-start_date = "2024-04-01"
+start_date = "2024-04-16"
 end_date = "2024-05-01"
 initialize = False
 run_sim(start_date, end_date, initialize)

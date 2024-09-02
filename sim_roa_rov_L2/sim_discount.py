@@ -7,12 +7,12 @@ import glob
 import os
 import scipy
 from scipy.optimize import minimize_scalar
-from pulp import *
 import numpy as np
 import shutil
 import time
 from util import *
 import pyasn
+import re
 
 # downloaded tor user/country distribution: https://metrics.torproject.org/userstats-relay-table.html?start=2021-05-12&end=2021-08-10
 UserPerCountry = {'US': 0.2423, 'RU': 0.1543, 'DE': 0.07980000000000001, 'NL': 0.040999999999999995, 'FR': 0.0346, 'ID': 0.0277, 'GB': 0.0256, 'IN': 0.0254, 'UA': 0.0215, 'LT': 0.0178}
@@ -748,6 +748,8 @@ def update_consensus_pickle(start_date, end_date, v4coverage, v6coverage, ipv4_a
     p = os.getcwd()
     archivePath = '../archive_pickles/'
     resultPath = '../processed/'
+    total = 0
+    count = 0
     # iterate through consensus pickles
     for t in datespan(start_date, end_date, delta=timedelta(hours=1)):
         # load old pickle
@@ -755,6 +757,7 @@ def update_consensus_pickle(start_date, end_date, v4coverage, v6coverage, ipv4_a
         if rs:
             updated_rs = []
             for r in rs:
+                total += 1
                 r.ipv4_prefix = ipv4_asns[r.ip][0]
                 r.asn = ipv4_asns[r.ip][1]
                 r.ipv4_roa = v4coverage[r.ip]
@@ -766,6 +769,8 @@ def update_consensus_pickle(start_date, end_date, v4coverage, v6coverage, ipv4_a
                     r.ipv6_roa = v6coverage[r.ipv6]
                     #if r.ipv6_asn != r.asn:
                     #    print(r.ip + ' in ' + str(r.asn) + '. ' + r.ipv6 + ' in ' + str(r.ipv6_asn))
+                if r.ipv4_roa != None or r.ipv6_roa != None:
+                    count += 1
                 updated_rs.append(r)
             filename = t.strftime('%Y') + '-' + t.strftime('%m') + '-' + t.strftime('%d') + '-' + t.strftime('%H') + '-processed.pickle'
             with open(filename, 'wb') as f_ucp:
@@ -777,6 +782,8 @@ def update_consensus_pickle(start_date, end_date, v4coverage, v6coverage, ipv4_a
                 shutil.move(filename, resultPath)
             else:
                 shutil.move(filename, resultPath)
+    print("========================================================")
+    print("preliminary relay stat = ", count/total)
     return
 
 # input ip prefix and return the max and min addresses within this prefix 
@@ -921,6 +928,20 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
 
     before = []
     after = []
+    
+    weighted_average_before = 0
+    weighted_average_after = 0
+
+    for i in range(len(weights1)):
+        p = weights1[i] / sum(weights1)
+        weighted_average_before += p * bws[i]
+
+    for i in range(len(weights2)):
+        p = weights2[i] / sum(weights2)
+        weighted_average_after += p * bws[i]
+
+    print("what is weighted before - ", weighted_average_before)
+    print("what is weighted after = ", weighted_average_after)
 
     for j in range(1):
         # count pre matching results
@@ -1167,9 +1188,10 @@ def plot_result():
     ax.plot(x.to_numpy(), after5['roa_coverage_after'].to_numpy(), label='discount = 0.5', color=CB_color_cycle[1], marker='o', markevery=5)
     ax.plot(x.to_numpy(), after8['roa_coverage_after'].to_numpy(), label='discount = 0.8', color=CB_color_cycle[2], marker='v', markevery=5)
     ax.plot(x.to_numpy(), before3['roa_coverage_before'].to_numpy(), label='Vanilla Guard Selection (discount = 1)', color=CB_color_cycle[3], marker='s', markevery=5)
-    fig.tight_layout()
     plt.xticks(x[::3], before3['date'][::3], rotation ='vertical', fontsize=18)
-    plt.legend(bbox_to_anchor=(1,0), loc="lower right", ncol=1, fontsize=12)
+    plt.legend(loc='lower left', bbox_to_anchor=(0, 1.02, 1, 0.2),
+          fancybox=True, shadow=True, ncol=1, fontsize=12)
+    # plt.legend(bbox_to_anchor=(1,0), loc="lower right", ncol=1, fontsize=12)
     plt.savefig('perc_clients_roa_discount.png',bbox_inches='tight', dpi=699)
 
 # main function - starts simulation from 2021-01 to 2024-05
@@ -1182,6 +1204,9 @@ def run_sim():
     # years = ['2024']
     # months = ['01', '02', '03', '04', '05']
     # hours = ['00']
+
+    years = ['2024']
+    months = ['05']
 
     # output lists
     date_strings = []
@@ -1261,8 +1286,10 @@ def run_sim():
                 print("Done updating pickles")
                 os.chdir(root)
 
-                # # create clients and simulate client guard node selection
-                discount_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+                # # # create clients and simulate client guard node selection
+                # discount_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+
+                discount_list = [0.5]
 
                 for d in discount_list:
                     roa_cov, roa_cov2 = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, None, saveClients, d)
@@ -1273,12 +1300,12 @@ def run_sim():
                         roa_coverage1.append(roa_cov[i])
                         roa_coverage2.append(roa_cov2[i])
 
-                print("finished year = " + y + " month = " + m + " with discount = " + str(d))
+                print("finished year = " + y + " month = " + m)
     
 
     d = {'date': date_strings, "discount": discounts, 'roa_coverage_before': roa_coverage1, 'roa_coverage_after': roa_coverage2}
     df = pd.DataFrame(data = d)
-    df.to_csv("./output-discount-2021-2023.csv", index=False)
+    df.to_csv("./output-discount-2024-05.csv", index=False)
 
 # function to simulate load factor
 def sim_load():
@@ -1435,9 +1462,11 @@ def plot_result2():
     ax.plot(x.to_numpy(), res4['utilizations'].to_numpy(), label='initial load = 0.8', color=CB_color_cycle[3], marker='s', markevery=3)
     ax.plot(x.to_numpy(), res5['utilizations'].to_numpy(), label='initial load = 0.9', color=CB_color_cycle[4], marker='D', markevery=3)
     ax.plot(x.to_numpy(), res6['utilizations'].to_numpy(), label='initial load = 1', color=CB_color_cycle[5], marker='*', markevery=5)
-    plt.legend(bbox_to_anchor=(1,0), loc="lower right", ncol=1, fontsize=12)
+    # plt.legend(bbox_to_anchor=(1,0), loc="lower right", ncol=1, fontsize=12)
     plt.xticks(x, res1['discount'], rotation ='vertical', fontsize=22)
     # fig.tight_layout()
+    plt.legend(loc='lower left', bbox_to_anchor=(0, 1.02, 1, 0.2),
+          fancybox=True, shadow=True, ncol=2, fontsize=12)
     plt.savefig('discountvsload202405.png',bbox_inches='tight', dpi=699)
     # plt.legend()
     # plt.savefig('/home/zzz/Downloads/discount-roa-time.png', bbox_inches='tight')
@@ -1470,13 +1499,15 @@ def plot_result3():
     # ax.set_xlabel('date', fontsize=20)
     ax.set_ylabel('Discount', fontsize=20)
     # ax.set_title('Optimal discount based on discount and consensuses',fontsize=24)
-    ax.plot(x.to_numpy(), res1['discount'].to_numpy(), label='load = 0.3', color=CB_color_cycle[0], marker='p', markevery=5)
-    ax.plot(x.to_numpy(), res2['discount'].to_numpy(), label='load = 0.5', color=CB_color_cycle[1], marker='o', markevery=5)
-    ax.plot(x.to_numpy(), res3['discount'].to_numpy(), label='load = 0.7', color=CB_color_cycle[2], marker='v', markevery=5)
-    ax.plot(x.to_numpy(), res4['discount'].to_numpy(), label='load = 0.8', color=CB_color_cycle[3], marker='s', markevery=5)
-    ax.plot(x.to_numpy(), res5['discount'].to_numpy(), label='load = 0.9', color=CB_color_cycle[4], marker='D', markevery=5)
-    ax.plot(x.to_numpy(), res6['discount'].to_numpy(), label='load = 1', color=CB_color_cycle[5], marker='*', markevery=5)
-    plt.legend(bbox_to_anchor=(1,0), loc="lower right", ncol=1, fontsize=12)
+    ax.plot(x.to_numpy(), res1['discount'].to_numpy(), label='initial load = 0.3', color=CB_color_cycle[0], marker='p', markevery=5)
+    ax.plot(x.to_numpy(), res2['discount'].to_numpy(), label='initial load = 0.5', color=CB_color_cycle[1], marker='o', markevery=5)
+    ax.plot(x.to_numpy(), res3['discount'].to_numpy(), label='initial load = 0.7', color=CB_color_cycle[2], marker='v', markevery=5)
+    ax.plot(x.to_numpy(), res4['discount'].to_numpy(), label='initial load = 0.8', color=CB_color_cycle[3], marker='s', markevery=5)
+    ax.plot(x.to_numpy(), res5['discount'].to_numpy(), label='initial load = 0.9', color=CB_color_cycle[4], marker='D', markevery=5)
+    ax.plot(x.to_numpy(), res6['discount'].to_numpy(), label='initial load = 1', color=CB_color_cycle[5], marker='*', markevery=5)
+    # plt.legend(bbox_to_anchor=(1,0), loc="lower right", ncol=1, fontsize=12)
+    plt.legend(loc='lower left', bbox_to_anchor=(0, 1.02, 1, 0.2),
+          fancybox=True, shadow=True, ncol=2, fontsize=12)
     plt.xticks(x[::3], res1['date'][::3], rotation ='vertical', fontsize=22)
     # fig.tight_layout()
     # plt.show()
@@ -1500,6 +1531,48 @@ def plot_result3():
     # # plt.savefig('Percentage by categories-discount=1.png')  
 
 
+def plot_result5():
+    df1 = pd.read_csv("/home/ubuntu/TOR-RPKI/sim_roa_rov_L2/output-matching.csv")
+    df2 = pd.read_csv("/home/ubuntu/TOR-RPKI/sim_roa_rov_L2/output-matching-plain.csv")
+    
+    date = df1['date']
+    matched_rate_with_churn = df1['matched_after']
+    matched_rate_without_churn = df2['matched_after']
+    x = date
+
+    # ymax = max(matched_rate_with_churn)
+    # ymin = min(matched_rate_without_churn)
+    # fig = plt.figure(figsize=(16,10), dpi=300)
+
+    # # ymin*0.99 should be changed according to the dataset
+    # for ii in range(len(matched_rate_with_churn)):
+    #     print(matched_rate_with_churn[ii])
+    #     print(matched_rate_without_churn[ii])
+    #     plt.text(x[ii]-0.1, ymin*0.99, float(matched_rate_with_churn[ii])-float(matched_rate_without_churn[ii]), size=16)
+
+    # plt.plot(x, matched_rate_with_churn, marker=".", color="#5bc0de")
+    # plt.plot(x, matched_rate_without_churn, marker=".", color="#E8743B")
+    # plt.ylim([ymin*0.985, ymax*1.01])
+    # plt.fill_between(x, matched_rate_with_churn, matched_rate_without_churn, color="grey", alpha=0.3)
+    # plt.yticks(matched_rate_with_churn, size=16)
+    # plt.xticks(x, size=16)
+    
+    # plt.show()
+
+
+    fig, ax = plt.subplots()
+    ax.set_xlabel('date', fontsize=20)
+    ax.set_ylabel('matched_rate', fontsize=20)
+    # ax.set_title('Actual load utilization given load and discount',fontsize=24)
+    ax.plot(x.to_numpy(), matched_rate_with_churn.to_numpy(), label='with churn', color=CB_color_cycle[0], marker='p', markevery=7)
+    ax.plot(x.to_numpy(), matched_rate_without_churn.to_numpy(), label='without churn', color=CB_color_cycle[2], marker='o', markevery=7)
+
+    plt.legend(bbox_to_anchor=(1,0), loc="lower right", ncol=1, fontsize=12)
+    plt.xticks(x[::7], date[::7], rotation ='vertical', fontsize=18)
+    # fig.tight_layout()
+    plt.savefig('matched_rate_churn_Jan2024-April2024.png',bbox_inches='tight', dpi=699)
+
+    
 def plot_result4():
     df = pd.read_csv("/home/zzz/Downloads/roa-rov-client-2024Jan-Apr.csv")
     
@@ -1543,9 +1616,10 @@ def plot_result4():
     # # plt.savefig('Percentage by categories-discount=1.png')  
 
 
-# run_sim()
+run_sim()
 # plot_result()
 # sim_load()
 # plot_result2()
 # plot_result3()
-plot_result4()
+# plot_result4()
+#plot_result5()
