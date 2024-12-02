@@ -1278,7 +1278,7 @@ def load_rov_database(rovset, method):
     # case 1 - add asn from MANRS to the list of ROV covered - high critera
     elif method == 1:
         print("case 1 - adding manrs high")
-        with open('/home/ubuntu/manrs-rov-high.txt') as txtfile:
+        with open('../manrs-rov-high.txt') as txtfile:
             for line in txtfile:
                 rovset.append(str(line))
         rovset = list(dict.fromkeys(rovset))
@@ -1286,21 +1286,21 @@ def load_rov_database(rovset, method):
     elif method == 2:
         print("case 2 - adding data from RoVISTA")
         threshold = 0.5
-        with open('/home/ubuntu/rovista.txt') as txtfile:
+        with open('../rovista.txt') as txtfile:
             for line in txtfile:
                 rovset.append(str(line))
         rovset = list(dict.fromkeys(rovset))
     # case 3 - add asn from Shulman group
     elif method == 3:
         print("case 3 - adding data from Shulman group")
-        with open('/home/ubuntu/protected.txt') as txtfile:
+        with open('../protected.txt') as txtfile:
             for line in txtfile:
                 rovset.append(str(line))
         rovset = list(dict.fromkeys(rovset))
     # case 4 - add asn from MANRS to the list of ROV covered - low critera
     elif method == 4:
         print("case 4 - adding manrs low")
-        with open('/home/ubuntu/manrs-rov-low.txt') as txtfile:
+        with open('../manrs-rov-low.txt') as txtfile:
             for line in txtfile:
                 rovset.append(str(line))
         rovset = list(dict.fromkeys(rovset))
