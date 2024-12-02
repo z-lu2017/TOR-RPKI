@@ -14,15 +14,6 @@ from util import *
 import pyasn
 import re
 
-# downloaded tor user/country distribution: https://metrics.torproject.org/userstats-relay-table.html?start=2021-05-12&end=2021-08-10
-UserPerCountry = {'US': 0.2423, 'RU': 0.1543, 'DE': 0.07980000000000001, 'NL': 0.040999999999999995, 'FR': 0.0346, 'ID': 0.0277, 'GB': 0.0256, 'IN': 0.0254, 'UA': 0.0215, 'LT': 0.0178}
-countries = list(UserPerCountry.keys())
-cweights = list(UserPerCountry.values())
-
-CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
-                    '#f781bf', '#a65628', '#984ea3',
-                    '#999999', '#e41a1c', '#dede00']
-
 def get_prefix_addresses_map():
     #maps prefix e.g. /19, /18, to the number of possible client within this prefix 
     '''
@@ -85,173 +76,6 @@ def get_roas(filename):
 
 
     return ipv4s
-
-def coverage_dict2(roas, ipv4s, make_pickle=False):
-    '''
-    given a list of IP addresses make a dictionary that maps IP address -> roa coverage info, if 
-    the IP is not covered IP -> None. 
-    format: IP ->  [IPnetwork, max len, prefix len, ASN]
-
-    :param roas: (string) filename to the .csv file for ROA 
-    :param ipv4s: (list) list of IPv4 addresses that needs to know their ROA coverage 
-    :param make_pickle: (boolean) specify whether the resulting dictionary will be pikled for future use 
-    '''
-    # get ROA nets
-    v4nets = get_roas(roas) # [ip network obj, maxlen, prefixlen, asn]
-    # set up coverage dicts
-    v4coverage = dict()
-
-    # loop through all ip addresses
-    for ip in ipv4s:
-        ip_addr = ipaddress.IPv4Address(ip)
-        v4coverage.setdefault(ip, None)
-        for net in v4nets:
-            if ip_addr in net[0]:
-                v4coverage[ip] = net
-                break
-
-    if make_pickle:
-        with open('coverage.pickle', 'wb') as f_cd1:
-            pickle.dump(v4coverage, f_cd1)
-    return v4coverage
-
-def assignCountry(numUsers, countries, cweights, selection_algo):
-    '''
-    generate the desired number of users and assign country randomly to each client based on the TOR user per country stats. 
-    Also assigns guard selection algo to each client. Both countries and cweights are global variable declared at the beginning of 
-    the file. 
-
-    :param numUsers: (int) number of clients generated 
-    :param countries: (list) list of countries of possible TOR user origin 
-    :param cweights: (list) weight of each country in the selection process. 
-    :param selection_algo: (string) selection algorithm for guards, choose from vanilla, matching or input the discount value (e.g. 0.9)
-
-    :return: (list) a list of client objects with country and selection algo assigned
-    '''
-    chosenCountry =  random.choices(countries, weights = cweights, k =  numUsers) #choose country based on tor's user / country data weight
-    clientList  =[] # list populated with client obj filled in with origin 
-
-    #iterate through all chosen client location and create new client obj
-    for i in chosenCountry:
-        newClient = Client(selection_algo)
-        newClient.origin = i
-        clientList.append(newClient)
-    return clientList
-
-def assignASN(numUsers, countries, cweights, selection_algo, roaFile, make_pickle = True):
-    '''
-    Generate client object with countries and ASN assigned to each. The ASN are assigned by choosing randomly within the client's 
-    country's ASN. The weight of the ASN selection process is based on which AS announce the most IP addresses. After the AS is assigned to client,
-    an IP address within the AS is randomly assigned to the client. 
-
-    :param numUsers: (int) number of clients generated 
-    :param countries: (list) list of countries of possible TOR user origin 
-    :param cweights: (list) weight of each country in the selection process. 
-    :param selection_algo: (string) selection algorithm for guards, choose from vanilla, matching or input the discount value (e.g. 0.9)
-    :param roaFile: (string) filename to .csv file containing ROA information to check for roa coverage 
-    :param make_pickle: (boolean) specify whether to make coverage dict for future use
-
-    :return: (list) a list of client objects with country, ASN, roa/rov coverage, and selection algo assigned
-    '''
-
-    prefixHosts = get_prefix_addresses_map() # prefix -> number of ip address
-    clientList = assignCountry(numUsers, countries, cweights, selection_algo)
-    ASdict = dict() #country -> list of AS object
-    weightdict = dict() # country -> weight of each AS
- 
-    ClientListwASN = [] #resulting list of clients that has the ASN filled in 
-    
-    specs = [0,0,0,0] #roa_rov, roa, rov, neither
-
-        
-    #iterate through pickled file and group ASN by country and populate 2 dict
-    #ASdict: origin-> list of AS
-    #weightdict: origin -> number of IPv4 each AS announce (acts as the weight of the random selection)
-    file =  open('ASNnumIP.pickle', 'rb')
-    numIPdict = pickle.load(file) # open pickled file, ASN -> AS object with numIPv4 filled in 
-    file.close()
-    for i in numIPdict: 
-        if numIPdict[i].origin not in ASdict.keys():
-            ASdict[numIPdict[i].origin] = [numIPdict[i]] 
-            weightdict[numIPdict[i].origin] = [numIPdict[i].numIPv4]
-        else:
-            ASdict[numIPdict[i].origin].append(numIPdict[i])
-            weightdict[numIPdict[i].origin].append(numIPdict[i].numIPv4)
-    #iterate through clientList chose from assignCountry, randomly chose an ASN within that country 
-    ipv4s = []
-    for c in clientList:
-        c.AS = random.choices(ASdict[c.origin], weights = weightdict[c.origin], k = 1)[0]
-        prefixWeights = []
-        for i in c.AS.prefixes:
-            prefix = i.split('/')[1]
-            prefixWeights.append(prefixHosts[int(prefix)])
-  
-        IPaddressPrefix = random.choices(c.AS.prefixes, weights = prefixWeights, k  = 1)
-        IP = IPaddressPrefix[0].split('/')[0].split(".")
-        prefix = int(IPaddressPrefix[0].split('/')[1])
-        ipBin = ""
-        for oct in IP:
-            ipBin += '{0:08b}'.format(int(oct))
-        choiceBitslen = 32- prefix
-        choiceBits = ""
-        resultIPBin = ""
-        while resultIPBin == "":
-            for i in range(choiceBitslen):
-                choiceBits += str(random.choices([0,1], k = 1)[0]) 
-            if choiceBits != "1"*choiceBitslen or choiceBits != "0"*choiceBitslen:
-                resultIPBin = ipBin[0:prefix] + choiceBits
-        resultIP = str(int(resultIPBin[0:8], 2)) + '.' + str(int(resultIPBin[8:16], 2)) + '.' + str(int(resultIPBin[16:24], 2)) + '.' + str(int(resultIPBin[24:32], 2))
-        c.ipaddress = resultIP
-        ipv4s.append(c.ipaddress)
-        c.prefix = IPaddressPrefix
-        ClientListwASN.append(c)
-    
-
-    #get coverage dict from the roa csv file 
-    # if make_pickle == True:
-    if True:
-        cdict = coverage_dict2(roaFile, ipv4s, make_pickle=True)
-    else:
-        file = open('coverage.pickle', 'rb')
-        cdict = pickle.load(file)
-    
-
-    #specs = [0,0,0,0] #roa_rov, roa, rov, neither
-    #iterate through the clients 
-    for c in ClientListwASN:
-        # find all guard candidates
-
-
-        #get the roa entry from csv from coverage dict which returns ip -> [ip network obj, maxlen, prefixlen, asn]
-       
-        c.roa = cdict[c.ipaddress]
-
-        #if roa does not exist then its not covered 
-        if c.roa == None:
-            c.roaCovered = False
-            # print("roa does not exist")
-            if check_rov(c.AS.ASN):
-                specs[2] += 1
-            else:
-                specs[3] += 1
-        #if the asn announced does not match the asn from roa file the its invalid or if the prefix annouunced is more specific than the roa specified it is invalid 
-        elif c.AS.ASN != c.roa[3] or c.roa[1] < c.prefix[0].split('/')[1]:
-            # print("roa invalid")
-            c.roaCovered = False
-            if check_rov(c.AS.ASN):
-                specs[2] += 1
-            else:
-                specs[3] += 1
-        #otherwise it is covered 
-        else:
-            c.roaCovered = True
-            # print("roa Covered in making client")
-            if check_rov(c.AS.ASN):
-                specs[0] += 1
-            else:
-                specs[1] += 1
-
-    return ClientListwASN, specs
 
 def check_roa_pre(roaFile):
     '''
@@ -783,7 +607,6 @@ def update_consensus_pickle(start_date, end_date, v4coverage, v6coverage, ipv4_a
             else:
                 shutil.move(filename, resultPath)
     print("========================================================")
-    print("preliminary relay stat = ", count/total)
     return
 
 # input ip prefix and return the max and min addresses within this prefix 
@@ -929,20 +752,6 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
     before = []
     after = []
     
-    weighted_average_before = 0
-    weighted_average_after = 0
-
-    for i in range(len(weights1)):
-        p = weights1[i] / sum(weights1)
-        weighted_average_before += p * bws[i]
-
-    for i in range(len(weights2)):
-        p = weights2[i] / sum(weights2)
-        weighted_average_after += p * bws[i]
-
-    print("what is weighted before - ", weighted_average_before)
-    print("what is weighted after = ", weighted_average_after)
-
     for j in range(1):
         # count pre matching results
         roa_cov = 0
@@ -1137,76 +946,13 @@ def get_origin(asn_orgID, orgID_origin, ASNnumIP):
         # print(ASNnumIP[asn].origin)
     return ASNnumIP
 
-
-# helper function to plot results
-def plot_result():
-    df = pd.read_csv("/home/zzz/Downloads/output-discount.csv")
-    
-    # aggregate and average over the same date
-    res = df.groupby(['date', 'discount'])['roa_coverage_before'].mean().reset_index()
-    res = df.groupby(['date', 'discount'], as_index=False)['roa_coverage_before'].mean()
-
-    res2 = df.groupby(['date', 'discount'])['roa_coverage_after'].mean().reset_index()
-    res2 = df.groupby(['date', 'discount'], as_index=False)['roa_coverage_after'].mean()
-
-    before3 = res.loc[res['discount'] == 0.3]
-    # before5 = res.loc[res['discount'] == 0.5]
-    # before8 = res.loc[res['discount'] == 0.8]
-
-    after3 = res2.loc[res2['discount'] == 0.3]
-    after5 = res2.loc[res2['discount'] == 0.5]
-    after8 = res2.loc[res2['discount'] == 0.8]
-
-    # after3['roa_coverage_after'] = after3['roa_coverage_after'].apply(lambda x: x*100)
-    # after5['roa_coverage_after'] = after5['roa_coverage_after'].apply(lambda x: x*100)
-    # after8['roa_coverage_after'] = after8['roa_coverage_after'].apply(lambda x: x*100)
-
-    x = before3['date']
-
-    # plt.xlabel('Date', fontsize=20)
-    # plt.ylabel('% Tor Clients', fontsize=20)
-    # plt.title('Percentage of Clients with ROA Covered Guard',fontsize=24)
-
-    # plt.plot(x, after3['roa_coverage_after'],marker = '.', color = 'blue', label = '30% Discount')
-    # plt.plot(x, after5['roa_coverage_after'],marker = '.', color = 'orange', label = '50% Discount')
-    # plt.plot(x, after8['roa_coverage_after'],marker = '.', color = 'red', label = '80% Discount')
-    # plt.plot(x, before3['roa_coverage_before'],marker = '.', color = 'green', label = " Vanilla Guard Selection")
-    # plt.xticks(x, before3['date'], rotation ='vertical')
-    # plt.legend()
-    # plt.savefig('/home/zzz/Downloads/discount-roa-time.png', bbox_inches='tight')
-    
-    # # Add a legend
-    # plt.legend(loc='upper left', bbox_to_anchor=(1,1), ncol=1)
-    
-    # # Show graphic
-    # plt.show()
-    # # plt.savefig('Percentage by categories-discount=1.png')  
-    fig, ax = plt.subplots()
-    # ax.set_xlabel('Date', fontsize=20)
-    ax.set_ylabel('% Tor Clients - PDF', fontsize=24)
-    ax.plot(x.to_numpy(), after3['roa_coverage_after'].to_numpy(), label='discount = 0.3', color=CB_color_cycle[0], marker='p', markevery=5)
-    ax.plot(x.to_numpy(), after5['roa_coverage_after'].to_numpy(), label='discount = 0.5', color=CB_color_cycle[1], marker='o', markevery=5)
-    ax.plot(x.to_numpy(), after8['roa_coverage_after'].to_numpy(), label='discount = 0.8', color=CB_color_cycle[2], marker='v', markevery=5)
-    ax.plot(x.to_numpy(), before3['roa_coverage_before'].to_numpy(), label='Vanilla Guard Selection (discount = 1)', color=CB_color_cycle[3], marker='s', markevery=5)
-    plt.xticks(x[::3], before3['date'][::3], rotation ='vertical', fontsize=18)
-    plt.legend(loc='lower left', bbox_to_anchor=(0, 1.02, 1, 0.2),
-          fancybox=True, shadow=True, ncol=1, fontsize=12)
-    # plt.legend(bbox_to_anchor=(1,0), loc="lower right", ncol=1, fontsize=12)
-    plt.savefig('perc_clients_roa_discount.png',bbox_inches='tight', dpi=699)
-
 # main function - starts simulation from 2021-01 to 2024-05
 def run_sim():
     # date range to iterate through
-    years = ['2021', '2022', '2023']
+    years = ['2021', '2022', '2023','2024']
     months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
+    months2 = ['01', '02', '03', '04', '05']
     hours = ['00']
-
-    # years = ['2024']
-    # months = ['01', '02', '03', '04', '05']
-    # hours = ['00']
-
-    years = ['2024']
-    months = ['05']
 
     # output lists
     date_strings = []
@@ -1220,7 +966,11 @@ def run_sim():
     saveClients = True
 
     for y in years:
-        for m in months:
+        if y == "2024":
+            months_final = months2
+        else:
+            months_final = months
+        for m in months_final:
             consensus_date = y + m + "01"
 
             # find routeview data for that month
@@ -1246,7 +996,7 @@ def run_sim():
             # v6MAPDICT, v6QUICKDICT = process_routeview_v6(rv6)
             os.chdir(root)
             print("Done processing ROUTEVIEW file")
-            asndb = pyasn.pyasn('ipasn_2024-07-12.dat')
+            asndb = pyasn.pyasn('../ipasn_2024-07-12.dat')
 
             for h in hours:
                 consensus_date_with_hour = y + "-" + m + "-01-" + h
@@ -1287,9 +1037,7 @@ def run_sim():
                 os.chdir(root)
 
                 # # # create clients and simulate client guard node selection
-                # discount_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-
-                discount_list = [0.5]
+                discount_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
                 for d in discount_list:
                     roa_cov, roa_cov2 = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, None, saveClients, d)
@@ -1305,13 +1053,12 @@ def run_sim():
 
     d = {'date': date_strings, "discount": discounts, 'roa_coverage_before': roa_coverage1, 'roa_coverage_after': roa_coverage2}
     df = pd.DataFrame(data = d)
-    df.to_csv("./output-discount-2024-05.csv", index=False)
+    df.to_csv("./output-discount.csv", index=False)
 
 # function to simulate load factor
 def sim_load():
     # date range to iterate through
-    years = ['2021', '2022', '2023']
-    years2 = ['2023']
+    years = ['2021', '2022', '2023', '2024']
     months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
     months2 = ['01', '02', '03', '04', '05']
     hours = ['00']
@@ -1328,7 +1075,11 @@ def sim_load():
     optimal_utilization = []
 
     for y in years:
-        for m in months:
+        if y == "2024":
+            months_final = months2
+        else:
+            months_final = months
+        for m in months_final:
             for h in hours:
                 consensus_date_with_hour = y + "-" + m + "-01-" + h
                 possible_discounts = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
@@ -1342,7 +1093,6 @@ def sim_load():
                     file = open(p, 'rb')
                 except FileNotFoundError:
                     print(p, 'does not exist')
-            
                 # process consensus and collect guard relays info
                 rs = pickle.load(file) #list of all relay objects
                 WGD = pickle.load(file) #weight in the consensus
@@ -1414,212 +1164,16 @@ def sim_load():
                             optimal_discount.append(d)
                             optimal_utilization.append(utilization)
 
-                        # print("when l = " + str(l) + " d = " + str(d) + " actual load = " + str(utilization))
-
     
 
     d = {'date': date_strings, "discount": discounts, 'load': loads, 'utilizations': utilizations}
     df = pd.DataFrame(data = d)
-    df.to_csv("./output-discount-load-2021.csv", index=False)
+    df.to_csv("./output-discount-load.csv", index=False)
 
     d = {'date': optimal_date, "discount": optimal_discount, 'load': optimal_load}
     df = pd.DataFrame(data = d)
-    df.to_csv("./output-discount-load-optimal-2021-2023.csv", index=False)
-
-
-def plot_result2():
-    df = pd.read_csv("/home/zzz/Downloads/output-discount-load-202405.csv")
-    
-    res1 = df.loc[df['load'] == 0.3]
-    res2 = df.loc[df['load'] == 0.5]
-    res3 = df.loc[df['load'] == 0.7]
-    res4 = df.loc[df['load'] == 0.8]
-    res5 = df.loc[df['load'] == 0.9]
-    res6 = df.loc[df['load'] == 1]
-    
-
-    x = res1['discount']
-
-    # plt.xlabel('discount')
-    # plt.ylabel('actual load utilization')
-    # plt.title('Actual load utilization given load and discount')
-
-    # plt.plot(x, res1['utilizations'],marker = '.', color = 'blue', label = 'discount = 0.3')
-    # plt.plot(x, res2['utilizations'],marker = '.', color = 'yellow', label = 'discount = 0.5')
-    # plt.plot(x, res3['utilizations'],marker = '.', color = 'red', label = 'discount = 0.7')
-    # plt.plot(x, res4['utilizations'],marker = '.', color = 'orange', label = 'discount = 0.8')
-    # plt.plot(x, res5['utilizations'],marker = '.', color = 'purple', label = 'discount = 0.9')
-    # plt.plot(x, res6['utilizations'],marker = '.', color = 'cyan', label = 'discount = 1')
-    # plt.xticks(x, res1['discount'], rotation ='vertical')
-
-    fig, ax = plt.subplots()
-    ax.set_xlabel('discount', fontsize=20)
-    ax.set_ylabel('actual load utilization', fontsize=20)
-    # ax.set_title('Actual load utilization given load and discount',fontsize=24)
-    ax.plot(x.to_numpy(), res1['utilizations'].to_numpy(), label='initial load = 0.3', color=CB_color_cycle[0], marker='p', markevery=3)
-    ax.plot(x.to_numpy(), res2['utilizations'].to_numpy(), label='initial load = 0.5', color=CB_color_cycle[1], marker='o', markevery=3)
-    ax.plot(x.to_numpy(), res3['utilizations'].to_numpy(), label='initial load = 0.7', color=CB_color_cycle[2], marker='v', markevery=3)
-    ax.plot(x.to_numpy(), res4['utilizations'].to_numpy(), label='initial load = 0.8', color=CB_color_cycle[3], marker='s', markevery=3)
-    ax.plot(x.to_numpy(), res5['utilizations'].to_numpy(), label='initial load = 0.9', color=CB_color_cycle[4], marker='D', markevery=3)
-    ax.plot(x.to_numpy(), res6['utilizations'].to_numpy(), label='initial load = 1', color=CB_color_cycle[5], marker='*', markevery=5)
-    # plt.legend(bbox_to_anchor=(1,0), loc="lower right", ncol=1, fontsize=12)
-    plt.xticks(x, res1['discount'], rotation ='vertical', fontsize=22)
-    # fig.tight_layout()
-    plt.legend(loc='lower left', bbox_to_anchor=(0, 1.02, 1, 0.2),
-          fancybox=True, shadow=True, ncol=2, fontsize=12)
-    plt.savefig('discountvsload202405.png',bbox_inches='tight', dpi=699)
-    # plt.legend()
-    # plt.savefig('/home/zzz/Downloads/discount-roa-time.png', bbox_inches='tight')
-    
-    # Add a legend
-    # plt.legend(loc='upper left', bbox_to_anchor=(1,1), ncol=1)
-    
-    # Show graphic
-    # plt.show()
-    # # plt.savefig('Percentage by categories-discount=1.png')  
-
-def plot_result3():
-    df = pd.read_csv("/home/zzz/Downloads/output-discount-load-optimal.csv")
-    
-    res1 = df.loc[df['load'] == 0.3]
-    res2 = df.loc[df['load'] == 0.5]
-    res3 = df.loc[df['load'] == 0.7]
-    res4 = df.loc[df['load'] == 0.8]
-    res5 = df.loc[df['load'] == 0.9]
-    res6 = df.loc[df['load'] == 1]
-    
-
-    x = res1['date']
-
-    # plt.xlabel('date')
-    # plt.ylabel('optimal discount')
-    # plt.title('Optimal discount based on discount and consensuses')
-    
-    fig, ax = plt.subplots()
-    # ax.set_xlabel('date', fontsize=20)
-    ax.set_ylabel('Discount', fontsize=20)
-    # ax.set_title('Optimal discount based on discount and consensuses',fontsize=24)
-    ax.plot(x.to_numpy(), res1['discount'].to_numpy(), label='initial load = 0.3', color=CB_color_cycle[0], marker='p', markevery=5)
-    ax.plot(x.to_numpy(), res2['discount'].to_numpy(), label='initial load = 0.5', color=CB_color_cycle[1], marker='o', markevery=5)
-    ax.plot(x.to_numpy(), res3['discount'].to_numpy(), label='initial load = 0.7', color=CB_color_cycle[2], marker='v', markevery=5)
-    ax.plot(x.to_numpy(), res4['discount'].to_numpy(), label='initial load = 0.8', color=CB_color_cycle[3], marker='s', markevery=5)
-    ax.plot(x.to_numpy(), res5['discount'].to_numpy(), label='initial load = 0.9', color=CB_color_cycle[4], marker='D', markevery=5)
-    ax.plot(x.to_numpy(), res6['discount'].to_numpy(), label='initial load = 1', color=CB_color_cycle[5], marker='*', markevery=5)
-    # plt.legend(bbox_to_anchor=(1,0), loc="lower right", ncol=1, fontsize=12)
-    plt.legend(loc='lower left', bbox_to_anchor=(0, 1.02, 1, 0.2),
-          fancybox=True, shadow=True, ncol=2, fontsize=12)
-    plt.xticks(x[::3], res1['date'][::3], rotation ='vertical', fontsize=22)
-    # fig.tight_layout()
-    # plt.show()
-    plt.savefig('discount_x_load.png',bbox_inches='tight', dpi=699)
-
-    # plt.plot(x, res1['discount'],marker = '.', color = 'blue', label = 'load = 0.3')
-    # plt.plot(x, res2['discount'],marker = '.', color = 'yellow', label = 'load = 0.5')
-    # plt.plot(x, res3['discount'],marker = '.', color = 'red', label = 'load = 0.7')
-    # plt.plot(x, res4['discount'],marker = '.', color = 'orange', label = 'load = 0.8')
-    # plt.plot(x, res5['discount'],marker = '.', color = 'purple', label = 'load = 0.9')
-    # plt.plot(x, res6['discount'],marker = '.', color = 'cyan', label = 'load = 1')
-    # plt.xticks(x, res1['date'], rotation ='vertical')
-    # plt.legend()
-    # plt.savefig('/home/zzz/Downloads/discount-roa-time.png', bbox_inches='tight')
-    
-    # Add a legend
-    # plt.legend(loc='upper left', bbox_to_anchor=(1,1), ncol=1)
-    
-    # # Show graphic
-    # plt.show()
-    # # plt.savefig('Percentage by categories-discount=1.png')  
-
-
-def plot_result5():
-    df1 = pd.read_csv("/home/ubuntu/TOR-RPKI/sim_roa_rov_L2/output-matching.csv")
-    df2 = pd.read_csv("/home/ubuntu/TOR-RPKI/sim_roa_rov_L2/output-matching-plain.csv")
-    
-    date = df1['date']
-    matched_rate_with_churn = df1['matched_after']
-    matched_rate_without_churn = df2['matched_after']
-    x = date
-
-    # ymax = max(matched_rate_with_churn)
-    # ymin = min(matched_rate_without_churn)
-    # fig = plt.figure(figsize=(16,10), dpi=300)
-
-    # # ymin*0.99 should be changed according to the dataset
-    # for ii in range(len(matched_rate_with_churn)):
-    #     print(matched_rate_with_churn[ii])
-    #     print(matched_rate_without_churn[ii])
-    #     plt.text(x[ii]-0.1, ymin*0.99, float(matched_rate_with_churn[ii])-float(matched_rate_without_churn[ii]), size=16)
-
-    # plt.plot(x, matched_rate_with_churn, marker=".", color="#5bc0de")
-    # plt.plot(x, matched_rate_without_churn, marker=".", color="#E8743B")
-    # plt.ylim([ymin*0.985, ymax*1.01])
-    # plt.fill_between(x, matched_rate_with_churn, matched_rate_without_churn, color="grey", alpha=0.3)
-    # plt.yticks(matched_rate_with_churn, size=16)
-    # plt.xticks(x, size=16)
-    
-    # plt.show()
-
-
-    fig, ax = plt.subplots()
-    ax.set_xlabel('date', fontsize=20)
-    ax.set_ylabel('matched_rate', fontsize=20)
-    # ax.set_title('Actual load utilization given load and discount',fontsize=24)
-    ax.plot(x.to_numpy(), matched_rate_with_churn.to_numpy(), label='with churn', color=CB_color_cycle[0], marker='p', markevery=7)
-    ax.plot(x.to_numpy(), matched_rate_without_churn.to_numpy(), label='without churn', color=CB_color_cycle[2], marker='o', markevery=7)
-
-    plt.legend(bbox_to_anchor=(1,0), loc="lower right", ncol=1, fontsize=12)
-    plt.xticks(x[::7], date[::7], rotation ='vertical', fontsize=18)
-    # fig.tight_layout()
-    plt.savefig('matched_rate_churn_Jan2024-April2024.png',bbox_inches='tight', dpi=699)
-
-    
-def plot_result4():
-    df = pd.read_csv("/home/zzz/Downloads/roa-rov-client-2024Jan-Apr.csv")
-    
-    date = df['date']
-    roa = df['roa_perc']
-    rov = df['rov_perc']
-     
-    x = date
-
-    # plt.xlabel('discount')
-    # plt.ylabel('actual load utilization')
-    # plt.title('Actual load utilization given load and discount')
-
-    # plt.plot(x, res1['utilizations'],marker = '.', color = 'blue', label = 'discount = 0.3')
-    # plt.plot(x, res2['utilizations'],marker = '.', color = 'yellow', label = 'discount = 0.5')
-    # plt.plot(x, res3['utilizations'],marker = '.', color = 'red', label = 'discount = 0.7')
-    # plt.plot(x, res4['utilizations'],marker = '.', color = 'orange', label = 'discount = 0.8')
-    # plt.plot(x, res5['utilizations'],marker = '.', color = 'purple', label = 'discount = 0.9')
-    # plt.plot(x, res6['utilizations'],marker = '.', color = 'cyan', label = 'discount = 1')
-    # plt.xticks(x, res1['discount'], rotation ='vertical')
-
-    fig, ax = plt.subplots()
-    ax.set_xlabel('date', fontsize=20)
-    ax.set_ylabel('client roa/rov distribution', fontsize=20)
-    # ax.set_title('Actual load utilization given load and discount',fontsize=24)
-    ax.plot(x.to_numpy(), roa.to_numpy(), label='roa', color=CB_color_cycle[0], marker='p', markevery=7)
-    ax.plot(x.to_numpy(), rov.to_numpy(), label='rov', color=CB_color_cycle[1], marker='o', markevery=7)
-
-    plt.legend(bbox_to_anchor=(1,0), loc="lower right", ncol=1, fontsize=12)
-    plt.xticks(x[::7], date[::7], rotation ='vertical', fontsize=18)
-    # fig.tight_layout()
-    plt.savefig('roa_rov_distribution_Jan2024-April2024.png',bbox_inches='tight', dpi=699)
-    # plt.legend()
-    # plt.savefig('/home/zzz/Downloads/discount-roa-time.png', bbox_inches='tight')
-    
-    # Add a legend
-    # plt.legend(loc='upper left', bbox_to_anchor=(1,1), ncol=1)
-    
-    # Show graphic
-    # plt.show()
-    # # plt.savefig('Percentage by categories-discount=1.png')  
+    df.to_csv("./output-discount-load-optimal.csv", index=False)
 
 
 run_sim()
-# plot_result()
-# sim_load()
-# plot_result2()
-# plot_result3()
-# plot_result4()
-#plot_result5()
+sim_load()

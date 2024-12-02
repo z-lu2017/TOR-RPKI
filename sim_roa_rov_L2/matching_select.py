@@ -21,22 +21,6 @@ import copy
 from ipaddress import ip_network
 from decimal import *
 
-# downloaded tor user/country distribution: https://metrics.torproject.org/userstats-relay-table.html?start=2021-05-01&end=2023-05-31
-UserPerCountry = {'US': 0.2423, 'RU': 0.1543, 'DE': 0.07980000000000001, 'NL': 0.040999999999999995, 'FR': 0.0346, 'ID': 0.0277, 'GB': 0.0256, 'IN': 0.0254, 'UA': 0.0215, 'LT': 0.0178}
-countries = list(UserPerCountry.keys())
-cweights = list(UserPerCountry.values())
-
-def weighted_sum(weights):
-    prob = []
-    for w in weights:
-        prob.append(w/sum(weights))
-    
-    s = 0
-    for i in range(len(weights)):
-        s += weights[i] * prob[i]
-
-    return s
-
 
 def get_prefix_addresses_map():
     #maps prefix e.g. /19, /18, to the number of possible client within this prefix 
@@ -122,144 +106,6 @@ def coverage_dict2(roas, ipv4s, make_pickle=False):
             pickle.dump(v4coverage, f_cd1)
     return v4coverage
 
-def assignCountry(numUsers, countries, cweights, selection_algo):
-    '''
-    generate the desired number of users and assign country randomly to each client based on the TOR user per country stats. 
-    Also assigns guard selection algo to each client. Both countries and cweights are global variable declared at the beginning of 
-    the file. 
-
-    :param numUsers: (int) number of clients generated 
-    :param countries: (list) list of countries of possible TOR user origin 
-    :param cweights: (list) weight of each country in the selection process. 
-    :param selection_algo: (string) selection algorithm for guards, choose from vanilla, matching or input the discount value (e.g. 0.9)
-
-    :return: (list) a list of client objects with country and selection algo assigned
-    '''
-    chosenCountry =  random.choices(countries, weights = cweights, k =  numUsers) #choose country based on tor's user / country data weight
-    clientList  =[] # list populated with client obj filled in with origin 
-
-    #iterate through all chosen client location and create new client obj
-    for i in chosenCountry:
-        newClient = Client(selection_algo)
-        newClient.origin = i
-        clientList.append(newClient)
-    return clientList
-
-def assignASN(numUsers, countries, cweights, selection_algo, roaFile, make_pickle = True):
-    '''
-    Generate client object with countries and ASN assigned to each. The ASN are assigned by choosing randomly within the client's 
-    country's ASN. The weight of the ASN selection process is based on which AS announce the most IP addresses. After the AS is assigned to client,
-    an IP address within the AS is randomly assigned to the client. 
-
-    :param numUsers: (int) number of clients generated 
-    :param countries: (list) list of countries of possible TOR user origin 
-    :param cweights: (list) weight of each country in the selection process. 
-    :param selection_algo: (string) selection algorithm for guards, choose from vanilla, matching or input the discount value (e.g. 0.9)
-    :param roaFile: (string) filename to .csv file containing ROA information to check for roa coverage 
-    :param make_pickle: (boolean) specify whether to make coverage dict for future use
-
-    :return: (list) a list of client objects with country, ASN, roa/rov coverage, and selection algo assigned
-    '''
-
-    prefixHosts = get_prefix_addresses_map() # prefix -> number of ip address
-    clientList = assignCountry(numUsers, countries, cweights, selection_algo)
-    ASdict = dict() #country -> list of AS object
-    weightdict = dict() # country -> weight of each AS
- 
-    ClientListwASN = [] #resulting list of clients that has the ASN filled in 
-    
-    specs = [0,0,0,0] #roa_rov, roa, rov, neither
-
-        
-    #iterate through pickled file and group ASN by country and populate 2 dict
-    #ASdict: origin-> list of AS
-    #weightdict: origin -> number of IPv4 each AS announce (acts as the weight of the random selection)
-    file =  open('ASNnumIP.pickle', 'rb')
-    numIPdict = pickle.load(file) # open pickled file, ASN -> AS object with numIPv4 filled in 
-    file.close()
-    for i in numIPdict: 
-        if numIPdict[i].origin not in ASdict.keys():
-            ASdict[numIPdict[i].origin] = [numIPdict[i]] 
-            weightdict[numIPdict[i].origin] = [numIPdict[i].numIPv4]
-        else:
-            ASdict[numIPdict[i].origin].append(numIPdict[i])
-            weightdict[numIPdict[i].origin].append(numIPdict[i].numIPv4)
-    #iterate through clientList chose from assignCountry, randomly chose an ASN within that country 
-    ipv4s = []
-    for c in clientList:
-        c.AS = random.choices(ASdict[c.origin], weights = weightdict[c.origin], k = 1)[0]
-        prefixWeights = []
-        for i in c.AS.prefixes:
-            prefix = i.split('/')[1]
-            prefixWeights.append(prefixHosts[int(prefix)])
-  
-        IPaddressPrefix = random.choices(c.AS.prefixes, weights = prefixWeights, k  = 1)
-        IP = IPaddressPrefix[0].split('/')[0].split(".")
-        prefix = int(IPaddressPrefix[0].split('/')[1])
-        ipBin = ""
-        for oct in IP:
-            ipBin += '{0:08b}'.format(int(oct))
-        choiceBitslen = 32- prefix
-        choiceBits = ""
-        resultIPBin = ""
-        while resultIPBin == "":
-            for i in range(choiceBitslen):
-                choiceBits += str(random.choices([0,1], k = 1)[0]) 
-            if choiceBits != "1"*choiceBitslen or choiceBits != "0"*choiceBitslen:
-                resultIPBin = ipBin[0:prefix] + choiceBits
-        resultIP = str(int(resultIPBin[0:8], 2)) + '.' + str(int(resultIPBin[8:16], 2)) + '.' + str(int(resultIPBin[16:24], 2)) + '.' + str(int(resultIPBin[24:32], 2))
-        c.ipaddress = resultIP
-        ipv4s.append(c.ipaddress)
-        c.prefix = IPaddressPrefix
-        ClientListwASN.append(c)
-    
-
-    #get coverage dict from the roa csv file 
-    # if make_pickle == True:
-    if True:
-        cdict = coverage_dict2(roaFile, ipv4s, make_pickle=True)
-    else:
-        file = open('coverage.pickle', 'rb')
-        cdict = pickle.load(file)
-    
-
-    #specs = [0,0,0,0] #roa_rov, roa, rov, neither
-    #iterate through the clients 
-    for c in ClientListwASN:
-        # find all guard candidates
-
-
-        #get the roa entry from csv from coverage dict which returns ip -> [ip network obj, maxlen, prefixlen, asn]
-       
-        c.roa = cdict[c.ipaddress]
-
-        #if roa does not exist then its not covered 
-        if c.roa == None:
-            c.roaCovered = False
-            # print("roa does not exist")
-            if check_rov(c.AS.ASN):
-                specs[2] += 1
-            else:
-                specs[3] += 1
-        #if the asn announced does not match the asn from roa file the its invalid or if the prefix annouunced is more specific than the roa specified it is invalid 
-        elif c.AS.ASN != c.roa[3] or c.roa[1] < c.prefix[0].split('/')[1]:
-            # print("roa invalid")
-            c.roaCovered = False
-            if check_rov(c.AS.ASN):
-                specs[2] += 1
-            else:
-                specs[3] += 1
-        #otherwise it is covered 
-        else:
-            c.roaCovered = True
-            # print("roa Covered in making client")
-            if check_rov(c.AS.ASN):
-                specs[0] += 1
-            else:
-                specs[1] += 1
-
-    return ClientListwASN, specs
-
 def check_roa_pre(roaFile):
     '''
     make an indirect dictionary to check for roa coverage based on IP address. This indirect dictionary works by assigning all ROA coverage information 
@@ -310,12 +156,6 @@ def check_roa(client, roaDict):
     return False
 
 def lp_optimization(bws, roas, rovs, croas_both, crovs_both, croas_roa, crovs_roa, croas_rov, crovs_rov, croas_neither, crovs_neither, client_dist):   
-    # print("sanity check")
-    # print("len bws = number of relays = ", len(bws))
-    # print("len roas = number of relays = ", len(roas))
-    # print("len crovs_rov = ", len(crovs_rov))
-    # print("client dist = ", client_dist)
-
     c_both1 = 0
     c_both2 = 0
     c_roa1 = 0
@@ -331,18 +171,11 @@ def lp_optimization(bws, roas, rovs, croas_both, crovs_both, croas_roa, crovs_ro
     for i in range(len(crovs_both)):
         c_both2 += crovs_both[i]
 
-    # print("c_both1 = ", c_both1)
-    # print("c_both2 = ", c_both2)
-
-
     for i in range(len(croas_roa)):
         c_roa1 += croas_roa[i]
 
     for i in range(len(crovs_roa)):
         c_roa2 += crovs_roa[i]
-
-    # print("C_roa1 = ", c_roa1)
-
 
     for i in range(len(croas_rov)):
         c_rov1 += croas_rov[i]
@@ -350,19 +183,11 @@ def lp_optimization(bws, roas, rovs, croas_both, crovs_both, croas_roa, crovs_ro
     for i in range(len(crovs_rov)):
         c_rov2 += crovs_rov[i]
 
-    # print("c_rov1 = ",c_rov1)
-    # print("c_rov2 = ", c_rov2)
-
-
     for i in range(len(croas_neither)):
         c_neither1 += croas_neither[i]
     
     for i in range(len(crovs_neither)):
         c_neither2 += crovs_neither[i]
-
-    # print("c_neither1 = ", c_neither1)
-    # print("c_neither2 = ", c_neither2)
-    # print("len crovs neither = ", len(crovs_neither))
 
     # normalize weights - use as prob
     sum_weights = sum(bws)
@@ -2939,63 +2764,6 @@ def get_origin(asn_orgID, orgID_origin, ASNnumIP):
     return ASNnumIP
 
 
-# helper function to plot results
-def plot_result():
-    CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
-                    '#f781bf', '#a65628', '#984ea3',
-                    '#999999', '#e41a1c', '#dede00']
-
-    df = pd.read_csv("./output-matching-202305.csv")
-    
-    res = df.groupby(['date', 'case'])['matched_before'].mean().reset_index()
-    res = df.groupby(['date', 'case'], as_index=False)['matched_before'].mean()
-
-    res2 = df.groupby(['date', 'case'])['matched_after'].mean().reset_index()
-    res2 = df.groupby(['date', 'case'], as_index=False)['matched_after'].mean()
-
-    before1 = res.loc[res['case'] == "no added rov"]
-    before3 = res.loc[res['case'] == "manrs-high"]
-    before2 = res.loc[res['case'] == "RoVISTA"]
-    before4 = res.loc[res['case'] == "Shulman group"]
-    before5 = res.loc[res['case'] == "manrs-low"]
-
-    after1 = res2.loc[res2['case'] == "no added rov"]
-    after3 = res2.loc[res2['case'] == "manrs-high"]
-    after2 = res2.loc[res2['case'] == "RoVISTA"]
-    after4 = res2.loc[res2['case'] == "Shulman group"]
-    after5 = res2.loc[res2['case'] == "manrs-low"]
-
-    y1 = [float(before1['matched_before']), float(before3['matched_before']), float(before2['matched_before']), float(before4['matched_before']), float(before5['matched_before'])]
-    y2 = [float(after1['matched_after']), float(after3['matched_after']), float(after2['matched_after']), float(after4['matched_after']), float(after5['matched_after'])]
-
-
-    y1 = [float(before1['matched_before']), float(before3['matched_before']), float(before2['matched_before']), float(before4['matched_before']), float(before5['matched_before'])]
-    y2 = [float(after1['matched_after']), float(after3['matched_after']), float(after2['matched_after']), float(after4['matched_after']), float(after5['matched_after'])]
-
-
-    for i in range(len(y1)):
-        print(y2[i]/y1[i])
-    
-    barWidth = 0.25
-    fig = plt.subplots(figsize =(12, 8))
-    br1 = np.arange(len(y1))
-    br2 = [x + barWidth for x in br1]
-
-    plt.bar(br1, y1, width = barWidth, edgecolor ='grey', label ='before optimization', color=CB_color_cycle[0])
-    plt.bar(br2, y2, width = barWidth, edgecolor ='grey', label ='after optimization', color=CB_color_cycle[1])
-
-    plt.xlabel('ROV data source', fontweight ='bold', fontsize = 24)
-    plt.ylabel('%  ROA ROV matched pairs', fontweight ='bold', fontsize = 24)
-    #plt.title('Percentage of ROA ROV matched client-relay pairs', fontsize=24)
-    # plt.xticks([r + barWidth for r in range(len(y1))], ["no added rov", "top 100", " top 20%", "rov match all roa", "random 10%"])
-    plt.xticks([r + barWidth for r in range(len(y1))], ["base", "manrs-high", "RoVISTA", "Hlavacek", "manrs-low"])
-    plt.xticks(fontsize=22)
-    plt.yticks(fontsize=22)
-    plt.legend(fontsize=22)
-    # plt.show()
-    plt.savefig('matching-results.png', bbox_inches='tight', dpi=599)
-
-
 def get_next_date(start_date):
     # all possible days for all months
     days1 = ['01', '02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31']
@@ -3044,7 +2812,7 @@ def get_next_date(start_date):
             return new_date
     
 
-# main function - starts simulation from 2021-01 to 2023-05
+# main function - starts simulation from 2021-01 to 2024-05
 def run_sim(start_date_global, end_date_global, initialize):
     start_time = time.time()
     hours = ['00']
@@ -3062,7 +2830,7 @@ def run_sim(start_date_global, end_date_global, initialize):
     # current directory as the root directory
     root = os.getcwd()
 
-    file =  open('./ASNwROV.pickle', 'rb') #open a file where a list of ASN with ROV is kept 
+    file =  open('../ASNwROV.pickle', 'rb') #open a file where a list of ASN with ROV is kept 
     ROVset = list(pickle.load(file))
     file.close()
 
@@ -3121,7 +2889,7 @@ def run_sim(start_date_global, end_date_global, initialize):
         # v6MAPDICT, v6QUICKDICT = process_routeview_v6(rv6)
         os.chdir(root)
         print("Done processing ROUTEVIEW file")
-        asndb = pyasn.pyasn('ipasn_2024-07-12.dat')
+        asndb = pyasn.pyasn('../ipasn_2024-07-12.dat')
 
         for h in hours:
             consensus_date_with_hour = y + "-" + m + "-" + d + "-" + h
@@ -3189,74 +2957,9 @@ def run_sim(start_date_global, end_date_global, initialize):
         
         consensus_date_formal = get_next_date(consensus_date_formal)
     end_time = time.time()
-    print("what does it take to complete one iter = ", end_time - start_time)
 
 
-def plot_result2():
-    CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
-                    '#f781bf', '#a65628', '#984ea3',
-                    '#999999', '#e41a1c', '#dede00']
-
-    df = pd.read_csv("./0.9-0.8.csv")
-    df2 = pd.read_csv("./0.9-0.7.csv")
-    df3 = pd.read_csv("./0.8-0.7.csv")
-    df4 = pd.read_csv("./0.8-0.6.csv")
-
-    res = df.groupby(['date', 'case'])['matched_before'].mean().reset_index()
-    res = df.groupby(['date', 'case'], as_index=False)['matched_before'].mean()
-
-    res2 = df.groupby(['date', 'case'])['matched_after'].mean().reset_index()
-    res2 = df.groupby(['date', 'case'], as_index=False)['matched_after'].mean()
-
-    res3 = df2.groupby(['date', 'case'])['matched_before'].mean().reset_index()
-    res3 = df2.groupby(['date', 'case'], as_index=False)['matched_before'].mean()
-
-    res4 = df2.groupby(['date', 'case'])['matched_after'].mean().reset_index()
-    res4 = df2.groupby(['date', 'case'], as_index=False)['matched_after'].mean()
-
-    res5 = df3.groupby(['date', 'case'])['matched_before'].mean().reset_index()
-    res5 = df3.groupby(['date', 'case'], as_index=False)['matched_before'].mean()
-
-    res6 = df3.groupby(['date', 'case'])['matched_after'].mean().reset_index()
-    res6 = df3.groupby(['date', 'case'], as_index=False)['matched_after'].mean()
-
-    res7 = df4.groupby(['date', 'case'])['matched_before'].mean().reset_index()
-    res7 = df4.groupby(['date', 'case'], as_index=False)['matched_before'].mean()
-
-    res8 = df4.groupby(['date', 'case'])['matched_after'].mean().reset_index()
-    res8 = df4.groupby(['date', 'case'], as_index=False)['matched_after'].mean()
-
-    print(res)
-
-    y1 = [float(res['matched_before']), float(res3['matched_before']), float(res5['matched_before']), float(res7['matched_before'])]
-    y2 = [float(res2['matched_after']), float(res4['matched_after']), float(res6['matched_after']), float(res8['matched_after'])]
-
-
-    for i in range(len(y1)):
-        print(y2[i]/y1[i])
-    
-    barWidth = 0.25
-    fig = plt.subplots(figsize =(12, 8))
-    br1 = np.arange(len(y1))
-    br2 = [x + barWidth for x in br1]
-
-    plt.bar(br1, y1, width = barWidth, edgecolor ='grey', label ='before optimization', color=CB_color_cycle[0])
-    plt.bar(br2, y2, width = barWidth, edgecolor ='grey', label ='after optimization', color=CB_color_cycle[1])
-
-    plt.xlabel('discount', fontweight ='bold', fontsize = 24)
-    plt.ylabel('%  ROA ROV matched pairs', fontweight ='bold', fontsize = 24)
-    #plt.title('Percentage of ROA ROV matched client-relay pairs', fontsize=24)
-    # plt.xticks([r + barWidth for r in range(len(y1))], ["no added rov", "top 100", " top 20%", "rov match all roa", "random 10%"])
-    plt.xticks([r + barWidth for r in range(len(y1))], ["0.9-0.8", "0.9-0.7", "0.8-0.7", "0.8-0.6"])
-    plt.xticks(fontsize=22)
-    plt.yticks(fontsize=22)
-    plt.legend(fontsize=22)
-    # plt.show()
-    plt.savefig('matching-discount-results.png', bbox_inches='tight', dpi=599)
-
-start_date = "2024-04-16"
-end_date = "2024-05-01"
-initialize = False
+start_date = "2024-01-01"
+end_date = "2024-01-03"
+initialize = True
 run_sim(start_date, end_date, initialize)
-# plot_result()
-#plot_result2()

@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import ipaddress
 import csv
 import numpy as np
-from ASNrov import *
 
 # constants, using suggested values from 271
 MAX_SAMPLE_THRESHOLD = .2                           # percent
@@ -21,7 +20,7 @@ GUARDS = set()          # set of all guards in current consensus
 CUR_GUARDS = dict()     # current guard relays in use (Guard, num_clients)
 WGD = 0                 # bandwidth weight for guard exits
 WGG = 0                 # bandwidth weight for guards
-file =  open('ASNwROV.pickle', 'rb') #open a file where a list of ASN with ROV is kept 
+file =  open('../ASNwROV.pickle', 'rb') #open a file where a list of ASN with ROV is kept 
 ROVset = pickle.load(file)
 file.close()
 

@@ -16,23 +16,6 @@ import random
 from pyscipopt import Model
 import re
 
-# downloaded tor user/country distribution: https://metrics.torproject.org/userstats-relay-table.html?start=2021-05-01&end=2023-05-31
-UserPerCountry = {'US': 0.2423, 'RU': 0.1543, 'DE': 0.07980000000000001, 'NL': 0.040999999999999995, 'FR': 0.0346, 'ID': 0.0277, 'GB': 0.0256, 'IN': 0.0254, 'UA': 0.0215, 'LT': 0.0178}
-countries = list(UserPerCountry.keys())
-cweights = list(UserPerCountry.values())
-
-def weighted_sum(weights):
-    prob = []
-    for w in weights:
-        prob.append(w/sum(weights))
-    
-    s = 0
-    for i in range(len(weights)):
-        s += weights[i] * prob[i]
-
-    return s
-
-
 def get_prefix_addresses_map():
     #maps prefix e.g. /19, /18, to the number of possible client within this prefix 
     '''
@@ -305,16 +288,6 @@ def check_roa(client, roaDict):
     return False
 
 def lp_optimization(bws, roas, rovs, croas_both, crovs_both, croas_roa, crovs_roa, croas_rov, crovs_rov, croas_neither, crovs_neither, client_dist):   
-    print("sanity check")
-    print("len bws = number of relays = ", len(bws))
-    print("len roas = number of relays = ", len(roas))
-    print("len croas = number of clients = ", len(croas_both))
-    print("len crovs_rov = ", len(crovs_rov))
-    print("client dist = ", client_dist)
-
-    # compute sum of all relay bandwidths
-    sum_bw = sum(bws)
-
     c_both1 = 0
     c_both2 = 0
     c_roa1 = 0
@@ -330,21 +303,11 @@ def lp_optimization(bws, roas, rovs, croas_both, crovs_both, croas_roa, crovs_ro
     for i in range(len(crovs_both)):
         c_both2 += crovs_both[i]
 
-    # print("c_both1 = ", c_both1)
-    # print("c_both2 = ", c_both2)
-    # print("len croas both = ", len(croas_both))
-    # print("len crovs both = ", len(crovs_both))
-
     for i in range(len(croas_roa)):
         c_roa1 += croas_roa[i]
 
     for i in range(len(crovs_roa)):
         c_roa2 += crovs_roa[i]
-
-    # print("C_roa1 = ", c_roa1)
-    # print("c_roa2 = ", c_roa2)
-    # print("len croas roa = ", len(croas_roa))
-    # print("len crovs roa = ", len(crovs_roa))
 
     for i in range(len(croas_rov)):
         c_rov1 += croas_rov[i]
@@ -352,21 +315,11 @@ def lp_optimization(bws, roas, rovs, croas_both, crovs_both, croas_roa, crovs_ro
     for i in range(len(crovs_rov)):
         c_rov2 += crovs_rov[i]
 
-    # print("c_rov1 = ",c_rov1)
-    # print("c_rov2 = ", c_rov2)
-    # print("len croas rov = ", len(croas_rov))
-    # print("len crovs rov = ", len(crovs_rov))
-
     for i in range(len(croas_neither)):
         c_neither1 += croas_neither[i]
     
     for i in range(len(crovs_neither)):
         c_neither2 += crovs_neither[i]
-
-    # print("c_neither1 = ", c_neither1)
-    # print("c_neither2 = ", c_neither2)
-    # print("len croas netiher = ", len(croas_neither))
-    # print("len crovs neither = ", len(crovs_neither))
 
     # normalize weights - use as prob
     sum_weights = sum(bws)
@@ -375,10 +328,10 @@ def lp_optimization(bws, roas, rovs, croas_both, crovs_both, croas_roa, crovs_ro
         weights_normalized.append(bws[i]/sum_weights)
 
     # parameter - default
-    load = 0.5
+    load = 0.8
     theta = 5 
-    penalty_norov = 0.8
-    penalty_noroa = 0.6
+    penalty_norov = 0.9
+    penalty_noroa = 0.7
     penalty_nothing = penalty_norov * penalty_noroa
     n = len(bws)
     matched_bonus = 1.5
@@ -1276,6 +1229,32 @@ def get_max_min(ipPrefix):
     else:
         return None, None
 
+# helper function to grab client geographic distribution
+def grab_client_geo_dist(consensus_date):
+    # fetch countries dist on that date
+    year = consensus_date.split("-")[0]
+    month = consensus_date.split("-")[1]
+    date = consensus_date.split("-")[2]
+
+    url = "https://metrics.torproject.org/userstats-relay-table.html?start=" + year + "-" + month + "-" + date + "&end=" + year + "-" + month + "-" + date
+    html_content = requests.get(url).text
+    soup = BeautifulSoup(html_content, "lxml")
+
+    allTds = soup.findAll('td')
+
+    countries = []
+    cweights = []
+
+
+    for t in allTds:
+        if "(" not in t.text:
+            countries.append(str(t.findChildren()[0]).split("country=")[1][0:2].upper())
+        else:
+            cweights.append(float(str(t.text).split("(")[1].split("%")[0])/100)
+
+    return countries, cweights
+
+
 # main function for generating users and choosing guards
 def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovset, saveClients = False, method = 0):
     '''
@@ -1291,10 +1270,6 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
     :return: (list) list of clients generated and the count for each coverage type (ROA, ROV, ROA_ROV, neither)
     
     '''
-
-    # merged step - generate clients and guard at the same time
-    global cweights
-    global countries
 
     # lists used for optimization - weights2 default weight
     weights2 = []
@@ -1325,7 +1300,7 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
     # case 1 - add asn from MANRS to the list of ROV covered - high critera
     elif method == 1:
         print("case 1 - adding manrs high")
-        with open('/home/ubuntu/manrs-rov-high.txt') as txtfile:
+        with open('../manrs-rov-high.txt') as txtfile:
             for line in txtfile:
                 rovset.append(str(line))
         rovset = list(dict.fromkeys(rovset))
@@ -1333,21 +1308,21 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
     elif method == 2:
         print("case 2 - adding data from RoVISTA")
         threshold = 0.5
-        with open('/home/ubuntu/rovista.txt') as txtfile:
+        with open('../rovista.txt') as txtfile:
             for line in txtfile:
                 rovset.append(str(line))
         rovset = list(dict.fromkeys(rovset))
     # case 3 - add asn from Shulman group
     elif method == 3:
         print("case 3 - adding data from Shulman group")
-        with open('/home/ubuntu/protected.txt') as txtfile:
+        with open('../protected.txt') as txtfile:
             for line in txtfile:
                 rovset.append(str(line))
         rovset = list(dict.fromkeys(rovset))
     # case 4 - add asn from MANRS to the list of ROV covered - low critera
     elif method == 4:
         print("case 4 - adding manrs low")
-        with open('/home/ubuntu/manrs-rov-low.txt') as txtfile:
+        with open('../manrs-rov-low.txt') as txtfile:
             for line in txtfile:
                 rovset.append(str(line))
         rovset = list(dict.fromkeys(rovset))
@@ -1423,12 +1398,6 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
                     guardWeights.append(w)
                     guardASNs.append(0)
 
-    weighted_average_before = 0
-    for i in range(len(weights2)):
-        p = weights2[i] / sum(weights2)
-        weighted_average_before += p * bws[i]
-    print("what is weighted_average_before = ", weighted_average_before)
-
     # compute statistics, rov-covered relay percentage and rov-covered bandwidth
     rov_relay_percentage = sum(rovs)/len(ASNs)
     rov_bandwidth = 0
@@ -1469,6 +1438,10 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
             ASdict[numIPdict[i].origin].append(numIPdict[i])
             weightdict[numIPdict[i].origin].append(numIPdict[i].numIPv4)
 
+    # hardcoded user geo distribution on 2024-05-01
+    UserPerCountry = {'DE': 0.4629, 'US': 0.1224, 'FI': 0.0486, 'IN': 0.0237, 'NL': 0.0205, 'ES': 0.02, 'ID': 0.0173, 'GB': 0.0157, 'FR': 0.0148, 'RU': 0.0144}
+    countries = list(UserPerCountry.keys())
+    cweights = list(UserPerCountry.values())
     if saveClients:
         print("starting client generation")
         print("=============================================")
@@ -1477,7 +1450,7 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
         while count < numClients:
             #make new client obj
             c = Client("matching")
-
+            
             # select client origin
             c.origin =  random.choices(countries, weights = cweights, k = 1)[0]
 
@@ -1507,33 +1480,6 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
             resultIP = str(int(resultIPBin[0:8], 2)) + '.' + str(int(resultIPBin[8:16], 2)) + '.' + str(int(resultIPBin[16:24], 2)) + '.' + str(int(resultIPBin[24:32], 2))
             c.ipaddress = resultIP
             c.prefix = IPaddressPrefix
-
-            # status_list = ['roa', 'rov', 'both', 'neither']
-            # status_weight = [0.25, 0.1, 0.15, 0.5]
-            
-            # st = random.choices(status_list, weights = status_weight, k = 1)[0]
-
-            # if st == 'roa':
-            #     croa += 1
-            #     croas.append(1)
-            #     crovs.append(0)
-            #     clients_roa.append(0)
-            # elif st == 'rov':
-            #     crov += 1
-            #     croas.append(0)
-            #     crovs.append(1)
-            #     clients_rov.append(1)
-            # elif st == 'both':
-            #     croa_rov += 1
-            #     croas.append(1)
-            #     crovs.append(1)
-            #     clients_both.append(2)
-            # else:
-            #     cneither += 1
-            #     croas.append(0)
-            #     crovs.append(0)
-            #     clients_neither.append(3)
-
 
             if check_roa(c, roaDict) and (check_rovset(c.AS.ASN, rovset)):
                 c.roaCovered = True
@@ -1601,8 +1547,6 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
 
             
     print("Done generating clients lists")
-    # print("client rov coverage == ", sum(crovs)/len(crovs))
-    # print("original weighted sum = ", weighted_sum(weights2))
     print("===========================================================")
 
     # compute proportion of different categories of clients
@@ -1774,36 +1718,8 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
         optimized_weights3 = optimized_weights[2*len(roas): 3*len(roas)]
         optimized_weights4 = optimized_weights[3*len(roas): 4*len(roas)]
     
-        weighted_average_after = 0
-        for i in range(len(optimized_weights1)):
-            p = optimized_weights[i] / sum(optimized_weights1)
-            weighted_average_after += p * bws[i] * client_dist[0]
-
-        for i in range(len(optimized_weights2)):
-            p = optimized_weights2[i] / sum(optimized_weights2)
-            weighted_average_after += p * bws[i] * client_dist[1]
-
-        for i in range(len(optimized_weights3)):
-            p = optimized_weights3[i] / sum(optimized_weights3)
-            weighted_average_after += p * bws[i] * client_dist[2]
-
-        for i in range(len(optimized_weights4)):
-            p = optimized_weights4[i] / sum(optimized_weights4)
-            weighted_average_after += p * bws[i] * client_dist[3]
-
-        print("what is weighted average after = ", weighted_average_after)
-'''
-        utilization = 0
         load = 0.5
-
-        for i in range(len(roas)):
-            inde = i // len(roas) # group number
-            r = i % len(roas) # relay number with in the group
-            p = client_dist[0] * optimized_weights1[r] + client_dist[1] * optimized_weights2[r] + client_dist[2] * optimized_weights3[r] + client_dist[3] * optimized_weights4[r]
-            utilization += p * sum(bws) * load
-
-        ut_perc = utilization/sum(bws)
-
+        '''
         print("outputting final all weights to csv")
         d = {'identity': identities, 'roa': roas, 'rov': rovs, 'weights': optimized_weights1}
         df = pd.DataFrame(data = d)
@@ -1856,7 +1772,7 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
             file.write("\n")
         file.close()
         
-       
+       '''
         dynamic_guards = {}
         for g in gs:
             dynamic_guards[g] = 0
@@ -2000,7 +1916,6 @@ def user_specified_client2(consensus_date, numClients, csvfile, numIPdict, rovse
         print("===========================================================")
         
     return results_before, results_after, rov_relay_percentage, rov_bandwidth_percentage
-    '''
 
 def graph_ROACoverage(h, p_roa, make_pickle = True,make_graph = True, name = "0.5ROACoverage2023.png"):
     """
@@ -2115,74 +2030,12 @@ def get_origin(asn_orgID, orgID_origin, ASNnumIP):
     return ASNnumIP
 
 
-# helper function to plot results
-def plot_result():
-    CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
-                    '#f781bf', '#a65628', '#984ea3',
-                    '#999999', '#e41a1c', '#dede00']
-
-    df = pd.read_csv("./output-matching-202305.csv")
-    
-    res = df.groupby(['date', 'case'])['matched_before'].mean().reset_index()
-    res = df.groupby(['date', 'case'], as_index=False)['matched_before'].mean()
-
-    res2 = df.groupby(['date', 'case'])['matched_after'].mean().reset_index()
-    res2 = df.groupby(['date', 'case'], as_index=False)['matched_after'].mean()
-
-    before1 = res.loc[res['case'] == "no added rov"]
-    before3 = res.loc[res['case'] == "manrs-high"]
-    before2 = res.loc[res['case'] == "RoVISTA"]
-    before4 = res.loc[res['case'] == "Shulman group"]
-    before5 = res.loc[res['case'] == "manrs-low"]
-
-    after1 = res2.loc[res2['case'] == "no added rov"]
-    after3 = res2.loc[res2['case'] == "manrs-high"]
-    after2 = res2.loc[res2['case'] == "RoVISTA"]
-    after4 = res2.loc[res2['case'] == "Shulman group"]
-    after5 = res2.loc[res2['case'] == "manrs-low"]
-
-    y1 = [float(before1['matched_before']), float(before3['matched_before']), float(before2['matched_before']), float(before4['matched_before']), float(before5['matched_before'])]
-    y2 = [float(after1['matched_after']), float(after3['matched_after']), float(after2['matched_after']), float(after4['matched_after']), float(after5['matched_after'])]
-
-
-    y1 = [float(before1['matched_before']), float(before3['matched_before']), float(before2['matched_before']), float(before4['matched_before']), float(before5['matched_before'])]
-    y2 = [float(after1['matched_after']), float(after3['matched_after']), float(after2['matched_after']), float(after4['matched_after']), float(after5['matched_after'])]
-
-
-    for i in range(len(y1)):
-        print(y2[i]/y1[i])
-    
-    barWidth = 0.25
-    fig = plt.subplots(figsize =(12, 8))
-    br1 = np.arange(len(y1))
-    br2 = [x + barWidth for x in br1]
-
-    plt.bar(br1, y1, width = barWidth, edgecolor ='grey', label ='before optimization', color=CB_color_cycle[0])
-    plt.bar(br2, y2, width = barWidth, edgecolor ='grey', label ='after optimization', color=CB_color_cycle[1])
-
-    plt.xlabel('ROV data source', fontweight ='bold', fontsize = 24)
-    plt.ylabel('%  ROA ROV matched pairs', fontweight ='bold', fontsize = 24)
-    #plt.title('Percentage of ROA ROV matched client-relay pairs', fontsize=24)
-    # plt.xticks([r + barWidth for r in range(len(y1))], ["no added rov", "top 100", " top 20%", "rov match all roa", "random 10%"])
-    plt.xticks([r + barWidth for r in range(len(y1))], ["base", "manrs-high", "RoVISTA", "Hlavacek", "manrs-low"])
-    plt.xticks(fontsize=22)
-    plt.yticks(fontsize=22)
-    plt.legend(fontsize=22)
-    # plt.show()
-    plt.savefig('matching-results.png', bbox_inches='tight', dpi=599)
-
-    
-
-# main function - starts simulation from 2021-01 to 2023-05
+# main function - starts simulation from 2021-01 to 2024-05
 def run_sim():
-
     # date range to iterate through
-    years = ['2021', '2022']
-    years2 = ['2024']
-    months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
-    months2 = ['05']
+    years = ['2024']
+    months = ['05']
     days = ['01']
-    # hours = ['00', '01', '02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21','22','23']
     hours = ['00']
 
     # output lists
@@ -2194,13 +2047,13 @@ def run_sim():
     # current directory as the root directory
     root = os.getcwd()
 
-    file =  open('./ASNwROV.pickle', 'rb') #open a file where a list of ASN with ROV is kept 
+    file =  open('../ASNwROV.pickle', 'rb') #open a file where a list of ASN with ROV is kept 
     ROVset = list(pickle.load(file))
     file.close()
 
 
-    for y in years2:
-        for m in months2:
+    for y in years:
+        for m in months:
             consensus_date = y + m + "01"
 
             # find routeview data for that month
@@ -2230,7 +2083,7 @@ def run_sim():
             # v6MAPDICT, v6QUICKDICT = process_routeview_v6(rv6)
             os.chdir(root)
             print("Done processing ROUTEVIEW file")
-            asndb = pyasn.pyasn('ipasn_2024-07-12.dat')
+            asndb = pyasn.pyasn('../ipasn_2024-07-12.dat')
 
             for h in hours:
                 consensus_date_with_hour = y + "-" + m + "-01-" + h
@@ -2270,124 +2123,60 @@ def run_sim():
                 print("Done updating pickles")
                 os.chdir(root)
 
-                # create clients and simulate client guard node selection            
-                #matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, ROVset, True, 0)
-                #for i in range(len(matched_perc)):
-                #    date_strings.append(consensus_date_with_hour)
-                #    case_strings.append("no added rov")
-                #    print("no added rov")
-                #    print("rov_relay_percentage = ", rov_relay_percentage)
-                #    print("rov bandwidth percentage = ", rov_bandwidth_percentage)
-                #    m1.append(matched_perc[i])
-                #    m2.append(matched_perc2[i])
-                #matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, ROVset, False, 1)
-                #for i in range(len(matched_perc)):
-                #    date_strings.append(consensus_date_with_hour)
-                #    case_strings.append("manrs-high")
-                #    print("manrs-high")
-                #    print("rov_relay_percentage = ", rov_relay_percentage)
-                #    print("rov bandwidth percentage = ", rov_bandwidth_percentage)
-                #    m1.append(matched_perc[i])
-                #    m2.append(matched_perc2[i])
+                # create clients and simulate client guard node selection - if run for the first time, set saveClients to True so it saves the clients objects to pickle and the same set can be used across multiple scenearios
+                matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, ROVset, False, 0)
+                for i in range(len(matched_perc)):
+                    date_strings.append(consensus_date_with_hour)
+                    case_strings.append("no added rov")
+                    print("no added rov")
+                    print("rov_relay_percentage = ", rov_relay_percentage)
+                    print("rov bandwidth percentage = ", rov_bandwidth_percentage)
+                    m1.append(matched_perc[i])
+                    m2.append(matched_perc2[i])
+                matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, ROVset, False, 1)
+                for i in range(len(matched_perc)):
+                    date_strings.append(consensus_date_with_hour)
+                    case_strings.append("manrs-high")
+                    print("manrs-high")
+                    print("rov_relay_percentage = ", rov_relay_percentage)
+                    print("rov bandwidth percentage = ", rov_bandwidth_percentage)
+                    m1.append(matched_perc[i])
+                    m2.append(matched_perc2[i])
                 matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, ROVset, False, 2)
                 for i in range(len(matched_perc)):
                     date_strings.append(consensus_date_with_hour)
                     case_strings.append("RoVISTA")
-                #   print("RoVISTA")
-                #    print("rov_relay_percentage = ", rov_relay_percentage)
-                #    print("rov bandwidth percentage = ", rov_bandwidth_percentage)
+                    print("RoVISTA")
+                    print("rov_relay_percentage = ", rov_relay_percentage)
+                    print("rov bandwidth percentage = ", rov_bandwidth_percentage)
                     m1.append(matched_perc[i])
                     m2.append(matched_perc2[i])
-                #matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, ROVset, False, 3)
-                #for i in range(len(matched_perc)):
-                #    date_strings.append(consensus_date_with_hour)
-                #    case_strings.append("Shulman group")
-                #    print("Shulman group")
-                #     print("rov_relay_percentage = ", rov_relay_percentage)
-                #     print("rov bandwidth percentage = ", rov_bandwidth_percentage)
-                #    m1.append(matched_perc[i])
-                #    m2.append(matched_perc2[i])
-                #matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, ROVset, False, 4)
-                #for i in range(len(matched_perc)):
-                #    date_strings.append(consensus_date_with_hour)
-                #    case_strings.append("manrs-low")
-                #     print("manrs-low")
-                #     print("rov_relay_percentage = ", rov_relay_percentage)
-                #     print("rov bandwidth percentage = ", rov_bandwidth_percentage)
-                #    m1.append(matched_perc[i])
-                #   m2.append(matched_perc2[i])
+                matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, ROVset, False, 3)
+                for i in range(len(matched_perc)):
+                    date_strings.append(consensus_date_with_hour)
+                    case_strings.append("Shulman group")
+                    print("Shulman group")
+                    print("rov_relay_percentage = ", rov_relay_percentage)
+                    print("rov bandwidth percentage = ", rov_bandwidth_percentage)
+                    m1.append(matched_perc[i])
+                    m2.append(matched_perc2[i])
+                matched_perc, matched_perc2, rov_relay_percentage, rov_bandwidth_percentage = user_specified_client2(consensus_date_with_hour, 1000000, roa_file, numIPdict, ROVset, False, 4)
+                for i in range(len(matched_perc)):
+                    date_strings.append(consensus_date_with_hour)
+                    case_strings.append("manrs-low")
+                    print("manrs-low")
+                    print("rov_relay_percentage = ", rov_relay_percentage)
+                    print("rov bandwidth percentage = ", rov_bandwidth_percentage)
+                    m1.append(matched_perc[i])
+                    m2.append(matched_perc2[i])
             
                 print("finished year = " + y + " month = " + m + " hour = " + h)    
 
-    #d = {'date': date_strings, 'case': case_strings, 'matched_before': m1, "matched_after": m2}
-    #df = pd.DataFrame(data = d)
-    #df.to_csv("./output-matching-202305.csv", index=False)
+    d = {'date': date_strings, 'case': case_strings, 'matched_before': m1, "matched_after": m2}
+    df = pd.DataFrame(data = d)
+    df.to_csv("./output-matching-202405.csv", index=False)
 
 
-
-def plot_result2():
-    CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
-                    '#f781bf', '#a65628', '#984ea3',
-                    '#999999', '#e41a1c', '#dede00']
-
-    df = pd.read_csv("./0.9-0.8.csv")
-    df2 = pd.read_csv("./0.9-0.7.csv")
-    df3 = pd.read_csv("./0.8-0.7.csv")
-    df4 = pd.read_csv("./0.8-0.6.csv")
-
-    res = df.groupby(['date', 'case'])['matched_before'].mean().reset_index()
-    res = df.groupby(['date', 'case'], as_index=False)['matched_before'].mean()
-
-    res2 = df.groupby(['date', 'case'])['matched_after'].mean().reset_index()
-    res2 = df.groupby(['date', 'case'], as_index=False)['matched_after'].mean()
-
-    res3 = df2.groupby(['date', 'case'])['matched_before'].mean().reset_index()
-    res3 = df2.groupby(['date', 'case'], as_index=False)['matched_before'].mean()
-
-    res4 = df2.groupby(['date', 'case'])['matched_after'].mean().reset_index()
-    res4 = df2.groupby(['date', 'case'], as_index=False)['matched_after'].mean()
-
-    res5 = df3.groupby(['date', 'case'])['matched_before'].mean().reset_index()
-    res5 = df3.groupby(['date', 'case'], as_index=False)['matched_before'].mean()
-
-    res6 = df3.groupby(['date', 'case'])['matched_after'].mean().reset_index()
-    res6 = df3.groupby(['date', 'case'], as_index=False)['matched_after'].mean()
-
-    res7 = df4.groupby(['date', 'case'])['matched_before'].mean().reset_index()
-    res7 = df4.groupby(['date', 'case'], as_index=False)['matched_before'].mean()
-
-    res8 = df4.groupby(['date', 'case'])['matched_after'].mean().reset_index()
-    res8 = df4.groupby(['date', 'case'], as_index=False)['matched_after'].mean()
-
-    print(res)
-
-    y1 = [float(res['matched_before']), float(res3['matched_before']), float(res5['matched_before']), float(res7['matched_before'])]
-    y2 = [float(res2['matched_after']), float(res4['matched_after']), float(res6['matched_after']), float(res8['matched_after'])]
-
-
-    for i in range(len(y1)):
-        print(y2[i]/y1[i])
-    
-    barWidth = 0.25
-    fig = plt.subplots(figsize =(12, 8))
-    br1 = np.arange(len(y1))
-    br2 = [x + barWidth for x in br1]
-
-    plt.bar(br1, y1, width = barWidth, edgecolor ='grey', label ='before optimization', color=CB_color_cycle[0])
-    plt.bar(br2, y2, width = barWidth, edgecolor ='grey', label ='after optimization', color=CB_color_cycle[1])
-
-    plt.xlabel('discount', fontweight ='bold', fontsize = 24)
-    plt.ylabel('%  ROA ROV matched pairs', fontweight ='bold', fontsize = 24)
-    #plt.title('Percentage of ROA ROV matched client-relay pairs', fontsize=24)
-    # plt.xticks([r + barWidth for r in range(len(y1))], ["no added rov", "top 100", " top 20%", "rov match all roa", "random 10%"])
-    plt.xticks([r + barWidth for r in range(len(y1))], ["0.9-0.8", "0.9-0.7", "0.8-0.7", "0.8-0.6"])
-    plt.xticks(fontsize=22)
-    plt.yticks(fontsize=22)
-    plt.legend(fontsize=22)
-    # plt.show()
-    plt.savefig('matching-discount-results.png', bbox_inches='tight', dpi=599)
 
 
 run_sim()
-#plot_result()
-#plot_result2()

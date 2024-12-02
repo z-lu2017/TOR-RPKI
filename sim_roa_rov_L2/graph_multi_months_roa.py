@@ -213,18 +213,17 @@ def graph_roa_multi_months_v6(months, guardsOnly):
                 pre_len = relay.ipv6_prefix.split('/')[1]
                 # e.g. 142.4.192.0/19 the above code will get the number after "/"
                 # max length
-                # print("what is ipv6 roa = ", relay.ipv6_roa)
-                # print("what is ipv6 prefix = ", relay.ipv6_prefix)
-                # print("what is ipv6 asn = ", relay.ipv6_asn)
                 ml = relay.ipv6_roa[1]    # max length of ROA network
                 pl = relay.ipv6_roa[2]    # prefix length of ROA network
                 # if max length is not set use prefix length
                 if ml == '':
                     ml = pl
+                if isinstance(relay.ipv6_asn, int):
+                    relay.ipv6_asn = [str(relay.ipv6_asn)]
                 # check if invalid
                 
                 # check if there is an roa and its validity
-                if len(relay.ipv6_asn) > 1:
+                if len(relay.ipv6_asn) >1 :
                     # relay.asn return a list supposedly with 1 entry which is the asn
                     # make sure the format is valid, inherented this format from get_prefix_and_asn() in util.py
                     print("invalid multi asn v6")
@@ -282,12 +281,6 @@ def graph_roa_multi_months_v6(months, guardsOnly):
                         v6_mlpl_valid += 1
                     # max length distribution
                     # see how many relay has the same max length setting
-        # print("month = ", month)
-        # print("what is v6 covered = ", v6_covered)
-        # print("what is v6 invalid = ", v6_invalid)
-        # if month == "2022-02-01-00":
-        #     print(num_relays_v6)
-        #     time.sleep(100000)
         v6Protected.append((v6_covered/num_relays_v6)*100)
         v6BWProtected.append((v6_bw_covered/nw_bandwidth_v6)*100)
         v6ProtectedTight.append((v6_mlpl/num_relays_v6)*100)
@@ -312,27 +305,5 @@ def graph_roa_multi_months_v6(months, guardsOnly):
     else:
         plt.savefig('AllRelaysROACoverage_v6.png',bbox_inches='tight')
         
-            
-            
-        
-def check_client():
-    file =  open('./typicalTOR1000Clients2023.pickle', 'rb') #open a file where a list of ASN with ROV is kept 
-    clients = pickle.load(file)
-    roarov = 0
-    roa = 0
-    rov = 0
-    neither = 0
-    for c in clients:
-        if check_rov(c.AS.ASN) and c.roaCovered:
-            roarov += 1
-        elif check_rov(c.AS.ASN):
-            rov += 1
-        elif c.roaCovered:
-            roa += 1
-        else:
-            neither += 1
-    print("roarov, roa, rov, neither")
-    print(roarov, roa, rov, neither)
-
 if __name__ == '__main__':
     sys.exit(main(sys.argv[1:]))

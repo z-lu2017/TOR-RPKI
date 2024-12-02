@@ -21,18 +21,6 @@ import copy
 from ipaddress import ip_network
 from decimal import *
 
-def weighted_sum(weights):
-    prob = []
-    for w in weights:
-        prob.append(w/sum(weights))
-    
-    s = 0
-    for i in range(len(weights)):
-        s += weights[i] * prob[i]
-
-    return s
-
-
 def get_prefix_addresses_map():
     #maps prefix e.g. /19, /18, to the number of possible client within this prefix 
     '''

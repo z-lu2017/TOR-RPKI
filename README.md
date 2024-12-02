@@ -1,12 +1,76 @@
-# TOR-RPKI_Siyang
-This python simulator simultates the TOR’s relay selection process. The consensus file from Tor Metrics are used to simulate to network environment, including the relay status and bandwidth. Then, the simulator creates client object to mimic the relay selection process in actual TOR network. ROA/ROV coverage for guard relay and ROA-ROV matching connection coverage are extracted from these simulations. The flow diagram below shows the work flow of the python simulator in creating guard selection simulation, record ROA/ROV coverage etc. Look at full documentation [here.](https://siyangsun2001.github.io/TOR-RPKI_Siyang/_build/html/index.html)
-## Mini Tutorial
-Preprocessing Consensus:
-The consensus file we downloaded from Tor Metrics need to be parsed and checked for RPKI coverage for future analysis. We parse these file once and pickle them (python’s library for converting object into byte string) for later use, so we don’t have to process the raw data everytime. 
+# TOR-RPKI
 
-0. Install [virtual environment](https://www.cs.virginia.edu/wiki/doku.php?id=linux_python_tips&s[]=source&s[]=local&s[]=env&s[]=bin&s[]=activate) if neded, and download all neccessary libraries.
-1. Download TOR Consensus file from TOR Metrics and store in the  tor-rpki/archive folder and de-compress it. 
-2. Download ROA data corresponding to the same month of consensus here, and de-compress the folder. 
-3. Go to the output folder within the de-compressed ROA folder and copy the only .csv file into the tor-rpki folder 
-4. !!(ignore this step, updated code to take in different format)!!Run convertData.py to convert the .csv file into the readable form 
-5. Run preprocessConsensus.py fill in the time period corresponding to the consensus file and also put the whole path to the .csv file for ROA validation. If this is your first time running a consensus that is half a year away from the previous consensus, you would want to put make_pickle = True, existing_file = False in the pre_asn function. In this way, it makes a new pickle file for the  ip -> asn map so later consensus could use this more recent file to achieve a faster runtime 
+This project simulates TOR's guard relay selection process using our discount and matching selection algorithms.
+
+## Description
+
+This python simulator simultates TOR’s guard relay selection process. The simulator selects a guard relay based on the specified method (discount or matching) and creates client objects to mimic the relay selection process in the actual TOR network. The simulator also monitors the network load and performs dyanimc load balancing in the simulation. For matching algorithm, the updated relay weights are computed using linear optimization. See the [paper](https://www.google.com) for detail.
+
+## Getting Started
+
+### Dependencies
+
+* [pyasn](https://github.com/hadiasghari/pyasn).
+* [requests](https://pypi.org/project/requests/).
+* [pytz](https://pypi.org/project/pytz/).
+* [pandas](https://pandas.pydata.org/docs/getting_started/install.html).
+* [scipy](https://pypi.org/project/scipy/).
+* [matplotlib](https://matplotlib.org/stable/install/index.html).
+* [PySCIPOpt](https://github.com/scipopt/PySCIPOpt).
+* [lxml](https://pypi.org/project/lxml/).
+* [bs4](https://pypi.org/project/beautifulsoup4/).
+
+### Data and sources: All data can be found [here](https://drive.google.com/drive/folders/1MS1V9wOVQeMj2WOlygidzzyeXcTYHJ6F?usp=drive_link). If you prefer to download the data yourself, all data links can be found in the detailed description. Make sure to follow the directory structure.
+* Consensuses data:[Tor Metrics](https://metrics.torproject.org/collector.html). Extract **archive.zip** to root directory, it will create a folder named **archive**. 
+* Routing data: [RouteViews](https://archive.routeviews.org/). Extract **routeviews.zip**  to root directory, it will create a folder named **routeviews**.
+* Route Origin Authorization (ROAs): [RIPE_RPKI_archive](https://ftp.ripe.net/rpki/). Extract **ROAs.zip** and **mergedROAs.zip** to root directory, it will create two folders named **ROAs** and **mergedROAs**. Can also run ```python3 getROA.py``` to download ROA data from 2021-01-01 to 2024-05-31 directly and it will create a folder named **ROAs** for the raw ROAs and a folder named **mergedROAs** in the root directory. 
+* Route Origin Validation (ROVs):
+	* [ROV monitor](https://rov.rpki.net/): Originally proposed by [Reuter et al.](https://doi.org/10.1145/3211852.3211856). Link may not be accesible. Run ```python3 getROV-RPKI.py``` to compile a list stored in **ASNwROV.pickle** in the root directory. This list is compiled from parsing a static page from ROV monitor on 2024-05. 
+	* [MANRS](https://github.com/CAIDA/MANRS_Data_Analysis): Measurement produced by [Du et al.](https://doi.org/10.1145/3517745.3561419). Two lists are compiled. **manrs-rov-high.txt** and **manrs-rov-low.txt** are used.
+	* [RoVista](https://rovista.netsecurelab.org): Measurement performed by [Li et al.](https://dl.acm.org/doi/10.1145/3618257.3624806). **rovista.txt** is obtained from their published data.
+	* [Routeservers](https://sit4.me/rpki): Measurement performed by [Hlavacek et al.](https://dl.acm.org/doi/10.5555/3620237.3620508). **protected.txt** is obtained from the source code.
+* Other data:
+	* [Inferred AS to Organization Mapping Dataset](https://www.caida.org/catalog/datasets/as-organizations/): **20240401.as-org2info.txt** is used.
+	* [pyasn IP2ASN](https://github.com/hadiasghari/pyasn): **ipasn_2024-07-12.dat** is used.
+	* Intermediate data: The link above also includes **archive_pickles.zip** and **processed.zip**, which are two intermediate data generated by data preprocessing. If you do not download those two folders, create two empty folders with the same name under root directory.
+
+### Data processing:
+Data processing is built into the simulation and each time intermediate results are stored in folder archive_pickles and processed. Make sure to run either simulation at least once or download our intermediate data before graphing. Measurement for ROA coverage for all ipv4/ipv6 relays and/or guard relays can be performed by running ```python3 graph_multi_months_roa.py [date range]```. See the file *graph_multi_months_roa.py* to see example calls.
+
+
+### Executing program
+
+* To run the simulation: go to folder sim_roa_rov_L2 and execute
+```
+python3 sim_discount.py 
+```
+
+or 
+
+```
+python3 sim_matching.py
+```
+
+or
+
+```
+python3 matching_select.py
+```
+
+## Output
+*sim_discount.py* runs two functions *run_sim()* and *sim_load()*. *run_sim()* simulates the discount selection algorithm on 1 million clients and outputs file *output-discount.csv* with the format date/discount/roa_coverage_before/roa_coverage_after. *sim_load()* simulates the relationship between load factor and discount factor and outputs two files *output-discount-load.csv* and *output-discount-load-optimal.csv*. *output-discount-load.csv* outputs the various load utilization under various combination of discount and load factor and is in the format date/discount/load/utilizations. *output-discount-load-optimal.csv* reports the best combo (aka kinks in the graphs) in the format date/discount/load. Either function can be run separately and both use the default date range from 2021-01-01 to 2024-05-31.
+
+*sim_matching.py* runs the matching selection algorithm on 1 million clients using various ROV source and outputs file *output-matching-202405.csv* with the format date/ROV_data/matched_before/matched_after. The default date used is May 2024.
+
+*matching_select.py* is the version running matching selection algorithm with churn. The default *matching_select.py* generates 1 million clients using geographic distribution from Tor Metrics and stores the client objects in the clients_daily folder. If clients objects are downloaded directly, run *matching_select_new.py* to skip the client generation step. *matching_select_plain.py* is the version that performs matching without considering churn and uses the same client distribution from stored clients objects.
+## License
+
+This project is licensed under the [NAME HERE] License - see the LICENSE.md file for details
+
+## Acknowledgments
+
+Inspiration, code snippets, etc.
+* [awesome-readme](https://github.com/matiassingers/awesome-readme)
+* [PurpleBooth](https://gist.github.com/PurpleBooth/109311bb0361f32d87a2)
+* [dbader](https://github.com/dbader/readme-template)
+* [zenorocha](https://gist.github.com/zenorocha/4526327)
