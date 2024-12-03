@@ -5,3 +5,5 @@
 /processed
 /routeviews
 /clients_daily
+/__pycache__
+/sim_roa_rov_L2/__pycache__
