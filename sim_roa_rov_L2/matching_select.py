@@ -1260,30 +1260,35 @@ def grab_client_geo_dist(consensus_date, countries_last, cweights_last):
     #print("sanity check here year = " + year + " month = " + month + " date = " + date)
              
     url = "https://metrics.torproject.org/userstats-relay-table.html?start=" + year + "-" + month + "-" + date + "&end=" + year + "-" + month + "-" + date
-    html_content = requests.get(url).text
-    soup = BeautifulSoup(html_content, "lxml")
+    try:
+        html_content = requests.get(url).text
+        soup = BeautifulSoup(html_content, "lxml")
 
-    allTds = soup.findAll('td')
+        allTds = soup.findAll('td')
 
-    countries = []
-    cweights = []
+        countries = []
+        cweights = []
 
 
-    for t in allTds:
-        if "(" not in t.text:
-            countries.append(str(t.findChildren()[0]).split("country=")[1][0:2].upper())
-        else:
-            cweights.append(float(str(t.text).split("(")[1].split("%")[0])/100)
+        for t in allTds:
+            if "(" not in t.text:
+                countries.append(str(t.findChildren()[0]).split("country=")[1][0:2].upper())
+            else:
+                cweights.append(float(str(t.text).split("(")[1].split("%")[0])/100)
           
 
-    if len(countries) == 0 or len(cweights) == 0:
-        print("Tor metrics error! user previous iteration data")
-        if len(countries_last) > 0:
-            countries = countries_last
-            cweights = cweights_last
-        else:
-            # hard-coded average as backup
-            return ["Germany", "United States", "Netherlands", "Ukraine", "Finland", "India", "Lithuania", "Indonesia", "France", "Spain"], [0.5349, 0.1077,0.0360, 0.0313,0.0298,0.0177,0.0164,0.0129,0.0125,0.0118]
+        if len(countries) == 0 or len(cweights) == 0:
+            print("Tor metrics error! user previous iteration data")
+            if len(countries_last) > 0:
+                countries = countries_last
+                cweights = cweights_last
+            else:
+                # hard-coded average as backup
+                return ["DE", "US", "NL", "UA", "FI", "IN", "LT", "ID", "FR", "ES"], [0.5349, 0.1077,0.0360, 0.0313,0.0298,0.0177,0.0164,0.0129,0.0125,0.0118]
+
+    except:
+        # in case request failed, use the backup
+        return ["DE", "US", "NL", "UA", "FI", "IN", "LT", "ID", "FR", "ES"], [0.5349, 0.1077,0.0360, 0.0313,0.0298,0.0177,0.0164,0.0129,0.0125,0.0118]
 
     return countries, cweights
 
@@ -2960,6 +2965,6 @@ def run_sim(start_date_global, end_date_global, initialize):
 
 
 start_date = "2024-01-01"
-end_date = "2024-01-03"
+end_date = "2024-01-05"
 initialize = True
 run_sim(start_date, end_date, initialize)

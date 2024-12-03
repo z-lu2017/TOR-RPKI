@@ -1441,7 +1441,7 @@ def grab_client_geo_dist(consensus_date, countries_last, cweights_last):
             cweights = cweights_last
         else:
             # hard-coded average as backup
-            return ["Germany", "United States", "Netherlands", "Ukraine", "Finland", "India", "Lithuania", "Indonesia", "France", "Spain"], [0.5349, 0.1077,0.0360, 0.0313,0.0298,0.0177,0.0164,0.0129,0.0125,0.0118]
+            return ["DE", "US", "NL", "UA", "FI", "IN", "LT", "ID", "FR", "ES"], [0.5349, 0.1077,0.0360, 0.0313,0.0298,0.0177,0.0164,0.0129,0.0125,0.0118]
 
     return countries, cweights
 
