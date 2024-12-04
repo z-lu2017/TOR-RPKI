@@ -2965,6 +2965,6 @@ def run_sim(start_date_global, end_date_global, initialize):
 
 
 start_date = "2024-01-01"
-end_date = "2024-01-05"
+end_date = "2024-01-03"
 initialize = True
 run_sim(start_date, end_date, initialize)
