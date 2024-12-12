@@ -2163,11 +2163,11 @@ def run_sim(start_date_global, end_date_global):
 
             da = {'date': date_strings, 'case': case_strings, "matched_after": m2}
             df = pd.DataFrame(data = da)
-            df.to_csv("./output-matching-plain" + str(consensus_date_with_hour) + ".csv", index=False)
+            df.to_csv("/home/ubuntu/output-matching-plain" + str(consensus_date_with_hour) + ".csv", index=False)
         
         consensus_date_formal = get_next_date(consensus_date_formal)
 
 
 start_date = "2024-01-01"
-end_date = "2024-01-03"
+end_date = "2024-01-14"
 run_sim(start_date, end_date)

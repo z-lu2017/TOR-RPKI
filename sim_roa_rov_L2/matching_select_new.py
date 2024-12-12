@@ -2109,7 +2109,7 @@ def run_sim(start_date_global, end_date_global):
     # current directory as the root directory
     root = os.getcwd()
 
-    file =  open('./ASNwROV.pickle', 'rb') #open a file where a list of ASN with ROV is kept 
+    file =  open('../ASNwROV.pickle', 'rb') #open a file where a list of ASN with ROV is kept 
     ROVset = list(pickle.load(file))
     file.close()
 
@@ -2155,7 +2155,7 @@ def run_sim(start_date_global, end_date_global):
         # v6MAPDICT, v6QUICKDICT = process_routeview_v6(rv6)
         os.chdir(root)
         print("Done processing ROUTEVIEW file")
-        asndb = pyasn.pyasn('ipasn_2024-07-12.dat')
+        asndb = pyasn.pyasn('../ipasn_2024-07-12.dat')
 
         for h in hours:
             consensus_date_with_hour = y + "-" + m + "-" + d + "-" + h
@@ -2207,11 +2207,11 @@ def run_sim(start_date_global, end_date_global):
 
             da = {'date': date_strings, 'case': case_strings, "matched_after": m2}
             df = pd.DataFrame(data = da)
-            df.to_csv("./output-matching-new" + str(consensus_date_with_hour) + ".csv", index=False)
+            df.to_csv("/home/ubuntu/output-matching-new" + str(consensus_date_with_hour) + ".csv", index=False)
         
         consensus_date_formal = get_next_date(consensus_date_formal)
 
 
-start_date = "2024-02-01"
-end_date = "2024-02-05"
+start_date = "2024-01-01"
+end_date = "2024-01-14"
 run_sim(start_date, end_date)

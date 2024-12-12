@@ -24,14 +24,14 @@ def guards(relays):
     return guards
 def parse_arguments(args):
     parser = argparse.ArgumentParser()
-    parser.add_argument("filenames", help="list of concensus to graph roa coverage")
     parser.add_argument("guards", help="graph just guards (y/n)")
     parser.add_argument("v4_or_v6", help="whether plot v4 (y) or v6 (n)")
     return parser.parse_args(args)
 
 def main(args):
     args = parse_arguments(args)
-    months = args.filenames.split(",")
+    date_range = "2021-01-01-00, 2021-02-01-00, 2021-03-01-00, 2021-04-01-00,2021-05-01-00,2021-06-01-00,2021-07-01-00,2021-08-01-00,2021-09-01-00,2021-10-01-00,2021-11-01-00,2021-12-01-00,2022-01-01-00,2022-02-01-00,2022-03-01-00,2022-04-01-00,2022-05-01-00,2022-06-01-00,2022-07-01-00,2022-08-01-00,2022-09-01-00,2022-10-01-00,2022-11-01-00,2022-12-01-00,2023-01-01-00,2023-02-01-00,2023-03-01-00,2023-04-01-00,2023-05-01-00, 2023-06-01-00, 2023-07-01-00, 2023-08-01-00, 2023-09-01-00, 2023-10-01-00, 2023-11-01-00, 2023-12-01-00, 2024-01-01-00, 2024-02-01-00, 2024-03-01-00, 2024-04-01-00, 2024-05-01-00"
+    months = date_range.split(",")
     guardsOnly = False
     if args.guards == 'y':
         guardsOnly = True

@@ -964,12 +964,13 @@ def run_sim():
     root = os.getcwd()
 
     saveClients = True
-
+    years = ['2024']
     for y in years:
         if y == "2024":
             months_final = months2
         else:
             months_final = months
+        months_final = ['05']
         for m in months_final:
             consensus_date = y + m + "01"
 
@@ -1053,7 +1054,7 @@ def run_sim():
 
     d = {'date': date_strings, "discount": discounts, 'roa_coverage_before': roa_coverage1, 'roa_coverage_after': roa_coverage2}
     df = pd.DataFrame(data = d)
-    df.to_csv("./output-discount.csv", index=False)
+    df.to_csv("/home/ubuntu/output-discount.csv", index=False)
 
 # function to simulate load factor
 def sim_load():
@@ -1074,11 +1075,14 @@ def sim_load():
     optimal_load = []
     optimal_utilization = []
 
+    years = ['2024']
+
     for y in years:
         if y == "2024":
             months_final = months2
         else:
             months_final = months
+        months_final = ['05']
         for m in months_final:
             for h in hours:
                 consensus_date_with_hour = y + "-" + m + "-01-" + h
@@ -1168,11 +1172,11 @@ def sim_load():
 
     d = {'date': date_strings, "discount": discounts, 'load': loads, 'utilizations': utilizations}
     df = pd.DataFrame(data = d)
-    df.to_csv("./output-discount-load.csv", index=False)
+    df.to_csv("/home/ubuntu/output-discount-load.csv", index=False)
 
     d = {'date': optimal_date, "discount": optimal_discount, 'load': optimal_load}
     df = pd.DataFrame(data = d)
-    df.to_csv("./output-discount-load-optimal.csv", index=False)
+    df.to_csv("/home/ubuntu/output-discount-load-optimal.csv", index=False)
 
 
 run_sim()

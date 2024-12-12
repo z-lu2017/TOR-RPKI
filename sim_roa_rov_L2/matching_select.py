@@ -106,34 +106,6 @@ def coverage_dict2(roas, ipv4s, make_pickle=False):
             pickle.dump(v4coverage, f_cd1)
     return v4coverage
 
-def check_roa_pre(roaFile):
-    '''
-    make an indirect dictionary to check for roa coverage based on IP address. This indirect dictionary works by assigning all ROA coverage information 
-    with the same first octet in the same dictionary entry. In this way, to check an IP address' coverage, the program only need to iterate through 
-    ROA entry of the same first octet, thus it will decrease the runtime of check up. 
-
-    :param roaFile: (string) filename to the .csv file containing ROA info 
-
-    :return: (dictionary) indirect dictionary, octet -> [list of roa coverage info]
-    '''
-    roaDict = dict() #octet -> [list of roa coverage info]
-    for i in range(1,256):
-        roaDict[str(i)] = []
-    path = "../mergedROAs/" + roaFile
-    with open(path) as f1:
-        f1.readline()
-        for line in f1:
-            line = line.split(',')
-            if ":" not in line[1]:
-                if "AS" in line[0]:
-                    if line[2].strip() == "":
-                        line[2] = line[1].split('/')[1]
-                    roaDict[line[1].split('.')[0]].append([int(float(line[0][2:].strip())), ipaddress.IPv4Network(line[1]), int(float(line[2]))])
-                else:
-                    roaDict[line[1].split('.')[0]].append([int(float(line[0].strip())), ipaddress.IPv4Network(line[1]), int(float(line[2]))])
-    
-    return roaDict
-
 def check_roa(client, roaDict):
     '''
     returns the ROA coverage info using the indirect dictionary created above. 
@@ -2958,13 +2930,13 @@ def run_sim(start_date_global, end_date_global, initialize):
 
             da = {'date': date_strings, 'case': case_strings, "matched_after": m2, "both_clients": m3, "roa_clients": m4, "rov_clients": m5, "neither_clients": m6}
             df = pd.DataFrame(data = da)
-            df.to_csv("./output-matching" + str(consensus_date_with_hour) + ".csv", index=False)
+            df.to_csv("/home/ubuntu/output-matching" + str(consensus_date_with_hour) + ".csv", index=False)
         
         consensus_date_formal = get_next_date(consensus_date_formal)
     end_time = time.time()
 
 
 start_date = "2024-01-01"
-end_date = "2024-01-03"
+end_date = "2024-01-15"
 initialize = True
 run_sim(start_date, end_date, initialize)
