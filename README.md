@@ -83,5 +83,5 @@ This project is licensed under the MIT License - see the LICENSE.md file for det
 
 ## Acknowledgments
 
-*Our modified Tor source code is based on Tor version 0.4.8.7. The original Tor code can be found [here](https://git.torproject.org/tor.git)
-*We modified tornettools to custom sample clients. The original tornettools code can be found [here](https://github.com/shadow/tornettools)
+* Our modified Tor source code is based on Tor version 0.4.8.7. The original Tor code can be found [here](https://git.torproject.org/tor.git)
+* We modified tornettools to custom sample clients. The original tornettools code can be found [here](https://github.com/shadow/tornettools)
