@@ -1,6 +1,6 @@
 # TOR-RPKI
 
-This project simulates TOR's guard relay selection process using our discount and matching selection algorithms.
+This project simulates TOR's guard relay selection process using our discount and matching selection algorithms. The [modified Tor source code](https://github.com/z-lu2017/tor-modified) and [customized tornettools](https://github.com/z-lu2017/tornettools_custom) can be found in their separate repos.
 
 ## Description
 
