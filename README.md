@@ -1,10 +1,10 @@
 # TOR-RPKI
 
-This project simulates TOR's guard relay selection process using our discount and matching selection algorithms. The [modified Tor source code](https://github.com/z-lu2017/tor-modified) and [customized tornettools](https://github.com/z-lu2017/tornettools_custom) can be found in their separate repos.
+This project simulates TOR's guard relay selection process using our discount and matching selection algorithms. Please refer to the paper *RPKI-Based Location-Unaware Tor Guard Relay Selection Algorithms* for detail. The [modified Tor source code](https://github.com/z-lu2017/tor-modified) and [customized tornettools](https://github.com/z-lu2017/tornettools_custom) can be found in their separate repos.
 
 ## Description
 
-This python simulator simultates TOR’s guard relay selection process. The simulator selects a guard relay based on the specified method (discount or matching) and creates client objects to mimic the relay selection process in the actual TOR network. The simulator also monitors the network load and performs dyanimc load balancing in the simulation. For matching algorithm, the updated relay weights are computed using linear optimization. See the [paper](https://www.google.com) for detail.
+This python simulator simultates TOR’s guard relay selection process. The simulator selects a guard relay based on the specified method (discount or matching) and creates client objects to mimic the relay selection process in the actual TOR network. The simulator also monitors the network load and performs dyanimc load balancing in the simulation. For matching algorithm, the updated relay weights are computed using linear optimization. See the paper for detail.
 
 ## Getting Started
 
