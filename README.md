@@ -20,7 +20,7 @@ This python simulator simultates TOR’s guard relay selection process. The simu
 * [lxml](https://pypi.org/project/lxml/).
 * [bs4](https://pypi.org/project/beautifulsoup4/).
 
-### Data and sources: All data can be found [here](https://drive.google.com/drive/folders/1MS1V9wOVQeMj2WOlygidzzyeXcTYHJ6F?usp=drive_link). If you prefer to download the data yourself, all data links can be found in the detailed description. Make sure to follow the directory structure. Be aware, raw data total size is more than 180 GB!!!
+### Data and sources: All data can be found [here](https://torstudy.cs.virginia.edu/). If you prefer to download the data yourself, all data links can be found in the detailed description. Make sure to follow the directory structure. Be aware, raw data total size is more than 180 GB!!!
 * Consensuses data:[Tor Metrics](https://metrics.torproject.org/collector.html). Extract **archive.zip** to root directory, it will create a folder named **archive**. 
 * Routing data: [RouteViews](https://archive.routeviews.org/). Extract **routeviews.zip**  to root directory, it will create a folder named **routeviews**.
 * Route Origin Authorization (ROAs): [RIPE_RPKI_archive](https://ftp.ripe.net/rpki/). Extract **ROAs.zip** and **mergedROAs.zip** to root directory, it will create two folders named **ROAs** and **mergedROAs**. Can also run ```python3 getROA.py``` to download ROA data from 2021-01-01 to 2024-05-31 directly and it will create a folder named **ROAs** for the raw ROAs and a folder named **mergedROAs** in the root directory. 
