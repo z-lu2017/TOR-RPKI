@@ -16,7 +16,7 @@ N/A
 All scripts have been tested on a VM with 1 vcpu and 16 GB of RAM. The estimated total time to run provided scripts should not exceed 72 hours. The estimated storage requirement is at least 100 GB.
 
 ### Hardware Requirements
-For artifact evaluation, our code uses a portion of the total data to demonstrate functionality. If reviewer chooses to run all datasets, the storage will require at least 308 GB. Additionally, Shadow simulations on a larger scale will require significantly more RAM.
+For artifact evaluation, our code uses a portion of the total data (2 weeks out of 4 months) to demonstrate functionality. Minimum storage required for running the experiment using 2 weeks of data is 100 GB and the total storage required for running the experiement using 4 months of data is 308 GB.
 
 ### Software Requirements
 All required packages are listed on the github page and are publicly available. All required packages are installed on the VM.
@@ -172,7 +172,7 @@ Expected runtime is up to 12 hours per simulation and less than 2GB of storage p
 
 ## Limitations (Only for Functional and Reproduced badges)
 Due to the large size of intermediate data, for experiment 2 and 4, we only included partial data. 
-Due to the large memory requirement, experiment 5 is performed on a smaller scale 0.005 compared to the 0.1 used in the original paper.
+Due to the large memory requirement, experiment 5 is performed on a smaller scale (0.005) compared to the scale (0.1) used in our paper.
 
 ## Notes on Reusability (Only for Functional and Reproduced badges)
 Our code provides a framework for integrating with other types of mechanisms against against additional routing attacks. See section 7.3 limitation and future integration in the paper for detail.
