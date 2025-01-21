@@ -107,13 +107,7 @@ output-discount-load.csv outputs the various load utilization under various comb
 output-discount-load-optimal.csv reports the best combo (aka kinks in the graphs) in the format date/discount/load.
 For artifact evaluation, we only included data for 2024/05 to save space and the scripts are set up to run only that data. If more storage is available, the scripts can be easily changed by altering the months_final(line 973 and 1085) and years(line 967 and 1078) in the code.
 This experiment supports main result 2.
-For experiment 2, 3 and 4, all final results can be plotted by running 
 
-```bash
-python3 plot.py
-```
-Make sure plotting data exist before plotting.
-This experiment produces figure 2 and figure 3 in the paper.
 Expected runtime is 1 hour per datapoint.
 
 #### Experiment 3: Perform matching selection 
@@ -123,7 +117,7 @@ The default date used is May 2024.
 ```bash
 python3 sim_matching.py
 ```
-This experiment supports main result 3 and produces figure 4 in the paper.
+This experiment supports main result 3.
 Expected runtime is 6 hours, among which 2 hours is spent on client generation.
 
 #### Experiment 4: Perform matching selection with churn 
@@ -141,12 +135,20 @@ and
 python3 matching_select_new.py
 ```
 
-This experiment supports main result 5 and produces figure 6 in the paper.
+This experiment supports main result 5.
 Expected runtime is 2 hours per datapoint for matching_select and 1 hour per datapoint for matching_select_new and matching_select_plain.
+
+For experiment 2, 3 and 4, all final results can be plotted by running 
+
+```bash
+python3 plot.py
+```
+Make sure plotting data exist before plotting by running at least one experiment from 2-4. 
+Plotting produces figure 2-6 from the paper.
 
 
 #### Experiment 5: Shadow simulation 
-This experiment performs Shadow simulation on all selection algorithms. 
+This experiment performs Shadow simulation on all selection algorithms. All experiments are run with Shadow v3.2.0.
 Three simulations are performed, vanilla, discount and matching. tor-vanilla, tor-discount, tor-matching are precompiled executables for each algorithm. The modified Tor source code are in tor-modified folder.
 When running a simulation, copy the corresponding executable to /home/ubuntu/.local/bin/ and overwrite as tor. E.g.
 
@@ -154,18 +156,35 @@ When running a simulation, copy the corresponding executable to /home/ubuntu/.lo
 sudo cp /home/ubuntu/tor-discount /home/ubuntu/.local/bin/tor
 ```
 
+Custom Tor configurations for Shadow:
+To run our modified Tor, additional data are prepared:
+* All files need to be put in folder /user/local/share/tor
+* ROA database: The file used to check ROA. Original data from mergedROAs folder. In the VM, file 20240501.csv is used.
+* ROV database: The file used to check ROV. Original data from any of the source listed on github. In the VM, ASNwROV.csv is used.
+* Routeview data: The routeview file matching the data from the ROA database. Original data from routeviews folder. In the VM, file routeviews-rv2-20240501-1000.pfx2as is used.
+It is important that data files match, i.e. the ROA database and the routeview data are close in date.
+
 The simulation can be setup by running 
 ```bash
 /home/ubuntu/tornettools_custom/generate.sh
 ```
-This scripts uses tornettools to setup for 3 simulations named tornet-0.005-discount, tornet-0.005-matching and tornet-0.005-vanilla. The names are predetermined to simplify merging and graphing. **Do not change the folder names**
-For artifact evaluation, we use a scale of 0.005 instead of 0.1 as in the paper. This is to save RAM, all simulations with the scale of 0.005 can be completed using 16GB of RAM.
+This script uses tornettools to generate 10 times, each time a different network with clients that matches with our desired ROA/ROV distribution. Randomness comes from two sources: a. RNG-seed from Shadow; b. our random sampling for clients with the desired ROA/ROV distribution
+Each run, the vanilla network is first generated, and then copied to create the discount and matching network. This is to ensure within the same run, all algorithms are run on the same network so we can compare results on the same basis.
+Then all data across all 10 runs are aggregated by running 
+
+```bash
+/home/ubuntu/tornettools_custom/aggregate.sh
+```
+
+The aggregate script finds all data from all runs (search by filename with keyword "matching", "discount", "vanilla") and computes the mean for the selected measurements.
 
 Run 
 ```bash
 /home/ubuntu/tornettools_custom/graph.sh
 ```
 To plot the simulation results.
+
+**All scripts provided uses the old scale, i.e. 0.1, to show the way we run the original experiment. The memory required to finish simulations on such scale will be at least 440 GB** 
 
 This experiment supports main result 4 and produces figure 5 in the paper.
 Expected runtime is up to 12 hours per simulation and less than 2GB of storage per simulation.

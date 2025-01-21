@@ -1003,9 +1003,14 @@ def update_consensus_pickle(start_date, end_date, v4coverage, v6coverage, ipv4_a
         if rs:
             updated_rs = []
             for r in rs:
-                r.ipv4_prefix = ipv4_asns[r.ip][0]
-                r.asn = ipv4_asns[r.ip][1]
-                r.ipv4_roa = v4coverage[r.ip]
+                if r.ip in ipv4_asns:
+                    r.ipv4_prefix = ipv4_asns[r.ip][0]
+                    r.asn = ipv4_asns[r.ip][1]
+                    r.ipv4_roa = v4coverage[r.ip]
+                else:
+                    r.ipv4_prefix = None
+                    r.asn = None
+                    r.ipv4_roa = None
                 if r.ipv6 != '':
                     r.ipv6_prefix = ipv6_asns[r.ipv6][0]
                     r.ipv6_asn = ipv6_asns[r.ipv6][1]
