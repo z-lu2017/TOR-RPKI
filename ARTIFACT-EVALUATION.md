@@ -86,6 +86,30 @@ List each experiment the reviewer has to execute. Describe:
  - How long it takes and how much space it consumes on disk. (approximately)
  - Which claim and results does it support, and how.
 
+To run all experiments, please maintain the following folder structure:
+
+TOR-RPKI/
+
+  - archive/
+
+  - archive_pickles/
+  
+  - clients_daily/
+  
+  - mergedROAs/
+  
+  - processed/
+  
+  - routeviews/
+
+  - sim_roa_rov_L2/
+
+      - scripts
+      
+      ....
+
+All python simulations scripts should be run from the folder sim_roa_rov_L2, while all Shadow simulation scripts are to be run from tornetools_custom folder.
+
 #### Experiment 1: Measure Tor relay ROA coverage
 This experiment measures the ROA coverage percentage and produce Figure 1 and Figure 7 in the paper.
 ```bash
@@ -94,6 +118,7 @@ python3 graph_multi_months_roa.py y y
 The first parameter indicates whether to measure guard relays only and the second parameter indicates whether it is v4(y) or v6(n).
 This experiment supports main result 1. 
 Expected runtime is 10 minutes and no additional storage requirement.
+The output files are *GuardOnlyROACoverage_v4.png*, *AllRelaysROACoverage_v4.png*, *GuardOnlyROACoverage_v6.png* and *AllRelaysROACoverage_v6.png*.
 
 #### Experiment 2: Perform discount selection
 This experiment performs the discount selection algorithm on data using 2024/05 and produce three outputs. sim_discount.py runs two functions run_sim() and sim_load(). 
@@ -109,6 +134,7 @@ For artifact evaluation, we only included data for 2024/05 to save space and the
 This experiment supports main result 2.
 
 Expected runtime is 1 hour per datapoint.
+The output files are *output-discount.csv*, *output-discount-load.csv", and *output-discount-load-optimal.csv*.
 
 #### Experiment 3: Perform matching selection 
 This experiment performs the matching selection algorithm on data using 2024/05 and produce one output. sim_matching.py runs the matching selection algorithm on 1 million clients using various ROV source and outputs file output-matching-202405.csv with the format date/ROV_data/matched_before/matched_after. 
@@ -119,6 +145,7 @@ python3 sim_matching.py
 ```
 This experiment supports main result 3.
 Expected runtime is 6 hours, among which 2 hours is spent on client generation.
+The output files are *output-matching-202405.csv*.
 
 #### Experiment 4: Perform matching selection with churn 
 This experiment performs the matching selection algorithm with the consideration of client churn. 
@@ -137,6 +164,8 @@ python3 matching_select_new.py
 
 This experiment supports main result 5.
 Expected runtime is 2 hours per datapoint for matching_select and 1 hour per datapoint for matching_select_new and matching_select_plain.
+The output files are *output-matching-$method$date.csv*. For example, running *matching_select_plain.py* with the date range 2024-01-01 to 2024-01-14 will produce an output file named *output-matching-new$date* for each day with the $date variable being the date for that run. This is also the case for the other methods.
+
 
 For experiment 2, 3 and 4, all final results can be plotted by running 
 
@@ -188,6 +217,8 @@ To plot the simulation results.
 
 This experiment supports main result 4 and produces figure 5 in the paper.
 Expected runtime is up to 12 hours per simulation and less than 2GB of storage per simulation.
+The output: for each simulation, the results are stored in folder *shadow.data* under the simulation folder, and running ``` tornettools parse $simulation``` will produce a folder named *tornet.plot.data* with all the data used in the plotting under the simulation folder. Running ```graph.sh``` under the tornettools_custom folder will output all graphs in the folder named *out*.
+
 
 ## Limitations (Only for Functional and Reproduced badges)
 Due to the large size of intermediate data, for experiment 2 and 4, we only included partial data. 

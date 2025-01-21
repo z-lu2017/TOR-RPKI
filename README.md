@@ -44,6 +44,29 @@ Measurement for ROA coverage for all ipv4/ipv6 relays and/or guard relays can be
 
 ### Simulation
 
+To run all experiments, please maintain the following folder structure:
+
+TOR-RPKI/
+
+  - archive/
+
+  - archive_pickles/
+  
+  - clients_daily/
+  
+  - mergedROAs/
+  
+  - processed/
+  
+  - routeviews/
+
+  - sim_roa_rov_L2/
+
+      - scripts
+      
+      ....
+
+
 * To run the simulation: go to folder sim_roa_rov_L2 and execute
 
 ```
