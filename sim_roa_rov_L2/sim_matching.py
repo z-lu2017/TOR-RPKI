@@ -1168,9 +1168,14 @@ def update_consensus_pickle(start_date, end_date, v4coverage, v6coverage, ipv4_a
                     r.asn = None
                     r.ipv4_roa = None
                 if r.ipv6 != '':
-                    r.ipv6_prefix = ipv6_asns[r.ipv6][0]
-                    r.ipv6_asn = ipv6_asns[r.ipv6][1]
-                    r.ipv6_roa = v6coverage[r.ipv6]
+                    if r.ipv6 in ipv6_asns:
+                        r.ipv6_prefix = ipv6_asns[r.ipv6][0]
+                        r.ipv6_asn = ipv6_asns[r.ipv6][1]
+                        r.ipv6_roa = v6coverage[r.ipv6]
+                    else:
+                        r.ipv6_prefix = None
+                        r.asn = None
+                        r.ipv6_roa = None
                     #if r.ipv6_asn != r.asn:
                     #    print(r.ip + ' in ' + str(r.asn) + '. ' + r.ipv6 + ' in ' + str(r.ipv6_asn))
                 updated_rs.append(r)
