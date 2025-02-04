@@ -187,7 +187,7 @@ sudo cp /home/ubuntu/tor-discount /home/ubuntu/.local/bin/tor
 
 Custom Tor configurations for Shadow:
 To run our modified Tor, additional data are prepared:
-* All files need to be put in folder /user/local/share/tor
+* All files need to be put in folder /usr/local/share/tor
 * ROA database: The file used to check ROA. Original data from mergedROAs folder. In the VM, file 20240501.csv is used.
 * ROV database: The file used to check ROV. Original data from any of the source listed on github. In the VM, ASNwROV.csv is used.
 * Routeview data: The routeview file matching the data from the ROA database. Original data from routeviews folder. In the VM, file routeviews-rv2-20240501-1000.pfx2as is used.
